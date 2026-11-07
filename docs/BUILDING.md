@@ -39,7 +39,7 @@ These are **not** in the repository and must never be committed (they're in `.gi
 
 | Path | What |
 |---|---|
-| `Celeste/` | Your Celeste PC copy, **FNA build** (`Celeste.exe`, `FNA.dll`, `Content/`). Steam: *opengl* beta. itch.io: Linux zip. Used for compiling the patch module and, optionally, for personal builds. |
+| `Celeste/` | Your Celeste PC copy, **FNA build** (`Celeste.exe`, `FNA.dll`, `Content/`). Steam: *opengl* beta. itch.io: the unzipped Linux build. Used for compiling the patch module and, optionally, for personal builds. |
 | `fmod/libs/android-arm64/` | `libfmod.so`, `libfmodstudio.so`, `fmod.jar` from the FMOD Engine **1.10.14** Android package (`api/lowlevel/lib/arm64-v8a`, `api/studio/lib/arm64-v8a`, `api/lowlevel/lib/fmod.jar`) |
 | `Celeste/lib64/` | *(desktop host)* `libfmod.so.10` and `libfmodstudio.so.10` (FMOD 1.10, shipped with the Linux game); the desktop build copies them as `libfmod.so` / `libfmodstudio.so` |
 | `art/icon.png` (or `.jpg`) | *(optional)* square image for the app icon, used by every build. Without it, personal builds crop the key art and public builds use the original mountain icon. |

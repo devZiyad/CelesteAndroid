@@ -16,11 +16,11 @@ Celeste is a C# game built on **FNA** (an XNA 4 reimplementation). `Celeste.exe`
 ```
 src/
   Celeste.Android/           .NET for Android app (launcher + game activity)
-    LauncherActivity.cs      main screen: key art, Play (or Install from Steam / Import folder / Import .zip when not installed) and Config; autoplay
+    LauncherActivity.cs      main screen: key art, Play (or Set up / Installing… when not playable) and Config; install progress (status line, bar, stats line); autoplay
     ConfigActivity.cs        Config: Port settings, Saves (import/export), Game files (check for updates, re-import, delete), Steam account
-    SteamActivity.cs         sign-in (username/password + Steam Guard, or QR for another device) and the live install progress screen
+    SteamActivity.cs         sign-in only (username/password + Steam Guard, or QR for another device); returns to the launcher, which starts the install
     InstallService.cs        foreground service (dataSync) that downloads and installs from Steam; InstallPipeline.cs is one attempt, InstallCoordinator.cs the shared state
-    GameInstaller.cs         import (SAF folder, .zip, embedded assets) → MonoMod patch → blurred background; saves import/export
+    GameInstaller.cs         import (SAF folder, embedded assets) → MonoMod patch → blurred background; saves import/export
     GameActivity.cs          SDLActivity subclass, process ":game"; runs the game on the SDL thread
     CelesteLauncher.cs       loads the patched Celeste.dll and invokes Celeste.Main via reflection
     HelloGame.cs             minimal FNA game (stack smoke test; used if the game isn't installed)
@@ -34,7 +34,7 @@ scripts/                     natives build, release build, device deploy, art ex
 
 ## Boot sequence on Android
 
-1. **LauncherActivity** (main process). If the game isn't installed: the user picks a folder/.zip → `GameInstaller` copies `Celeste.exe` + `Content/` into `files/Celeste` (internal storage) → runs **MonoMod on the device** → `files/patched/Celeste.dll` → generates `files/background.png`.
+1. **LauncherActivity** (main process). If the game isn't installed: the user picks a folder (Set up > Import from folder) → `GameInstaller` copies `Celeste.exe` + `Content/` into `files/Celeste` (internal storage) → runs **MonoMod on the device** → `files/patched/Celeste.dll` → generates `files/background.png`.
 2. **PLAY** starts **GameActivity** in a separate process (`:game`). Celeste and FNA keep a lot of static state, so every session gets a fresh process, and the process is killed when the activity finishes.
 3. `GameActivity` extends SDL's `SDLActivity` (SDL's Java sources are compiled into the APK and bound to C# with `AndroidJavaSource Bind="true"`). It overrides:
    - `getLibraries()` → `SDL3`, `fmod`, `fmodstudio` (FMOD must be loaded before `FMOD.init`);
@@ -140,9 +140,9 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
 - `InstallService` is a foreground service (`foregroundServiceType=dataSync`, notification channel `install_progress`) holding a Wi-Fi lock and a partial wake
   lock. `InstallPipeline` does one attempt (connect, sign in with the stored refresh token, ownership, manifest, download and verify, patch, side art); the
   service repeats it with a backoff when the network drops. `files/steam/install.pending` marks an unfinished install, so the system restarting the service
-  after a kill (or the launcher opening) resumes it. The screens only follow `InstallCoordinator`: the step text, the file counter (a file counts when its last
+  after a kill (or the launcher opening) resumes it. The launcher's main screen only follows `InstallCoordinator`: the step text, the file counter (a file counts when its last
   chunk is written), bytes and speed, and `Done`.
-- `SteamActivity` only does the interactive part (sign-in) and shows the live state. *Check for updates* runs the same pipeline in update mode and stops after
+- `SteamActivity` only does the interactive part (sign-in). The launcher's main screen shows the live state (status line with the current file, shortened in the middle by `InstallText.FitMiddle`; bar; stats line from `InstallText.FormatStats`). *Check for updates* runs the same pipeline in update mode and stops after
   the manifest when the installed manifest id is already the latest. Signing out (`SteamAccount`) ends the session, asks Steam to revoke the refresh token
   when it can, and deletes the token and its Keystore key; game files and saves are kept.
 - The in-game PORT section lists only settings that apply live. Renderer (needs a restart) is only in Config.
