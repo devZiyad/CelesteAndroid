@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Android.Content;
+using CelesteAndroid.Steam;
 
 namespace CelesteAndroid
 {
@@ -17,15 +18,16 @@ namespace CelesteAndroid
 		Done,
 	}
 
-	/// <summary>What the install screen, the launcher and the notification show. <see cref="Fraction"/> is -1 when unknown.</summary>
-	public sealed record InstallStatus(InstallStage Stage, string Title, string Step, string Detail = "", float Fraction = -1f, int Percent = -1)
+	/// <summary>What the launcher's main screen and the notification show. <see cref="Fraction"/> is -1 when unknown.</summary>
+	public sealed record InstallStatus(InstallStage Stage, string Title, string Step, string Detail = "", float Fraction = -1f, int Percent = -1,
+		TransferStats? Stats = null)
 	{
 		public static readonly InstallStatus None = new(InstallStage.Idle, "", "");
 		public bool IsActive => Stage is InstallStage.Running or InstallStage.Waiting;
 	}
 
 	/// <summary>
-	/// The install's current state, shared by the foreground service (which does the work), the install screen and the launcher.
+	/// The install's current state, shared by the foreground service (which does the work) and the launcher.
 	/// They all run in the app's main process, so a static is enough: a screen opened while the service is running just reads
 	/// <see cref="Current"/> and subscribes to <see cref="Changed"/> (called on a worker thread).
 	/// </summary>
@@ -89,8 +91,10 @@ namespace CelesteAndroid
 
 		#endregion
 
-		public static string FormatBytes(long bytes) =>
-			bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.0} GB" : $"{bytes / (double)(1L << 20):0} MB";
+		public static string FormatBytes(long bytes) => InstallText.FormatBytes(bytes);
+
+		/// <summary>Title of the Done status that means an update check found nothing to do.</summary>
+		public const string UpToDateTitle = "Celeste is up to date";
 	}
 
 	/// <summary>The stored session is missing or Steam rejected it: the user has to sign in again.</summary>

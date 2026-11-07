@@ -36,8 +36,8 @@ namespace CelesteAndroid
 
 		private static void LogLine(string line) => Log.Info("CelesteAndroid", "[CelesteAndroid] " + line);
 
-		private void Step(string step, string detail = "", float fraction = -1f, int percent = -1) =>
-			InstallCoordinator.Publish(new InstallStatus(InstallStage.Running, title, step, detail, fraction, percent));
+		private void Step(string step, string detail = "", float fraction = -1f, int percent = -1, TransferStats? stats = null) =>
+			InstallCoordinator.Publish(new InstallStatus(InstallStage.Running, title, step, detail, fraction, percent, stats));
 
 		public async Task RunAsync(CancellationToken ct)
 		{
@@ -48,7 +48,7 @@ namespace CelesteAndroid
 			(string Account, string RefreshToken)? stored = SteamTokenStore.Load(context);
 			if (stored == null)
 				throw new SignInRequiredException("Sign in to Steam to download Celeste.");
-			Step("Signing in to Steam");
+			Step($"Signing in to Steam as {stored.Value.Account}");
 			try
 			{
 				await session.LogOnAsync(stored.Value.Account, stored.Value.RefreshToken, ct).ConfigureAwait(false);
@@ -85,7 +85,7 @@ namespace CelesteAndroid
 			{
 				LogLine($"steam: update check: manifest {manifest.ManifestId} is already installed");
 				InstallCoordinator.ClearPending(context);
-				InstallCoordinator.Publish(new InstallStatus(InstallStage.Done, "Celeste is up to date", "You already have the latest version from Steam.", Fraction: 1f, Percent: 100));
+				InstallCoordinator.Publish(new InstallStatus(InstallStage.Done, InstallCoordinator.UpToDateTitle, "You already have the latest version from Steam.", Fraction: 1f, Percent: 100));
 				return;
 			}
 
@@ -125,14 +125,9 @@ namespace CelesteAndroid
 			Interlocked.Exchange(ref lastBytes, p.BytesDone);
 			float fraction = p.BytesTotal == 0 ? 0f : Math.Min(1f, p.BytesDone / (float)p.BytesTotal);
 			int percent = (int)(fraction * 100);
-			string detail = p.BytesPerSecond > 0 && p.Phase == "Downloading" ? $"{InstallCoordinator.FormatBytes((long)p.BytesPerSecond)}/s" : "";
-			if (p.Phase == "Verifying")
-			{
-				Step($"Verifying files ({p.FilesDone}/{p.FilesTotal})", p.CurrentFile ?? "", fraction, percent);
-				return;
-			}
-			string file = string.IsNullOrEmpty(p.CurrentFile) ? "game files" : p.CurrentFile!;
-			Step($"Downloading {file} ({p.FilesDone}/{p.FilesTotal}, {InstallCoordinator.FormatBytes(p.BytesDone)} of {InstallCoordinator.FormatBytes(p.BytesTotal)})", detail, fraction, percent);
+			var stats = new TransferStats(p.FilesDone, p.FilesTotal, p.BytesDone, p.BytesTotal, p.Phase == "Downloading" ? p.BytesPerSecond : 0);
+			string step = InstallText.StepLine(p.Phase == "Verifying" ? "Verifying" : "Downloading", p.CurrentFile);
+			Step(step, fraction: fraction, percent: percent, stats: stats);
 		}
 	}
 }

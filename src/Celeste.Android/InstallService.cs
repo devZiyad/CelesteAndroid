@@ -256,7 +256,7 @@ namespace CelesteAndroid
 				.SetSmallIcon(Resource.Drawable.ic_stat_install)!
 				.SetContentTitle(status.Percent >= 0 ? $"{status.Title} · {status.Percent}%" : status.Title)!
 				.SetContentText(text ?? status.Step)!
-				.SetStyle(new Notification.BigTextStyle().BigText(text ?? status.Step))!
+				.SetStyle(new Notification.BigTextStyle().BigText(text ?? (status.Stats == null ? status.Step : status.Step + "\n" + InstallText.FormatStats(status.Stats))))!
 				.SetOngoing(true)!
 				.SetOnlyAlertOnce(true)!
 				.SetContentIntent(OpenApp())!
@@ -272,7 +272,7 @@ namespace CelesteAndroid
 			return new Notification.Builder(this, ResultChannel)
 				.SetSmallIcon(Resource.Drawable.ic_stat_install)!
 				.SetContentTitle(done ? status.Title : "Download stopped")!
-				.SetContentText(done ? (status.Title == "Celeste is up to date" ? status.Step : "The game is ready to play.") : status.Step)!
+				.SetContentText(done ? (status.Title == InstallCoordinator.UpToDateTitle ? status.Step : "The game is ready to play.") : status.Step)!
 				.SetStyle(new Notification.BigTextStyle().BigText(done ? "The game is ready to play." : status.Step))!
 				.SetAutoCancel(true)!
 				.SetContentIntent(OpenApp())!
