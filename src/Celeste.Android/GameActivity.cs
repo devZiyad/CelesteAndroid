@@ -10,8 +10,8 @@ using Org.Libsdl.App;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Roda o jogo. Fica num processo próprio (":game") porque o Celeste e o FNA guardam estado estático:
-	/// cada partida começa num processo novo, e o processo morre quando o jogo fecha.
+	/// Runs the game. It lives in its own process (":game") because Celeste and FNA keep static state:
+	/// every run starts in a fresh process, and the process dies when the game closes.
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.GameActivity",
@@ -29,14 +29,14 @@ namespace CelesteAndroid
 		public const string LogTag = "CelesteAndroid";
 		public const string ExtraDriver = "driver";
 
-		// O Java carrega SDL3 e FMOD (o FMOD precisa estar carregado antes do FMOD.init);
-		// FNA3D/FAudio são carregados pelo .NET via DllImport.
+		// Java loads SDL3 and FMOD (FMOD must be loaded before FMOD.init);
+		// FNA3D/FAudio are loaded by .NET via DllImport.
 		protected override string[] GetLibraries() => new[] { "SDL3", "fmod", "fmodstudio" };
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
-			// O FMOD no Android precisa do Context para o áudio e para ler arquivos.
+			// On Android, FMOD needs the Context for audio and for reading files.
 			Org.Fmod.FMOD.Init(this);
 		}
 
@@ -48,15 +48,15 @@ namespace CelesteAndroid
 				Process.KillProcess(Process.MyPid());
 		}
 
-		// Chamado pelo SDL na thread "SDLThread" depois que a superfície existe; substitui o SDL_main nativo.
+		// Called by SDL on the "SDLThread" thread once the surface exists; replaces the native SDL_main.
 		protected override void Main()
 		{
-			// O FNA/FNA3D loga no stderr, que no Android não vai para o logcat.
+			// FNA/FNA3D log to stderr, which does not reach logcat on Android.
 			FNALoggerEXT.LogInfo = msg => Log.Info(LogTag, msg);
 			FNALoggerEXT.LogWarn = msg => Log.Warn(LogTag, msg);
 			FNALoggerEXT.LogError = msg => Log.Error(LogTag, msg);
 
-			// "OpenGL" força o driver GLES; o padrão é Vulkan (SDL_GPU).
+			// "OpenGL" forces the GLES driver; the default is Vulkan (SDL_GPU).
 			string? driver = Intent?.GetStringExtra(ExtraDriver);
 			if (!string.IsNullOrEmpty(driver))
 				SDL3.SDL.SDL_SetHint("FNA3D_FORCE_DRIVER", driver);
@@ -69,8 +69,8 @@ namespace CelesteAndroid
 				}
 				else
 				{
-					// O launcher só habilita "PLAY" com o jogo instalado.
-					Log.Warn(LogTag, "Jogo não instalado; fechando.");
+					// The launcher only enables "PLAY" when the game is installed.
+					Log.Warn(LogTag, "Game not installed; closing.");
 					RunOnUiThread(Finish);
 				}
 			}

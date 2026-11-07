@@ -7,13 +7,13 @@ namespace CelesteAndroid.Steam
 	public sealed record RemovalReport(int FilesDeleted, long BytesFreed, int DirectoriesRemoved);
 
 	/// <summary>
-	/// Ao baixar de novo ou atualizar, remove da pasta do jogo todo arquivo que não está no conjunto necessário do manifesto
-	/// atual (versões antigas, arquivos pulados de instalações anteriores, sobras) e as pastas que ficarem vazias.
+	/// When re-downloading or updating, removes from the game folder every file that is not in the current manifest's needed
+	/// set (old versions, skipped files from earlier installs, leftovers) and the folders that end up empty.
 	/// </summary>
 	public static class StaleFileRemover
 	{
-		/// <param name="root">Pasta do jogo (a raiz do depot).</param>
-		/// <param name="neededPaths">Caminhos relativos (com '/') que devem existir.</param>
+		/// <param name="root">The game folder (the depot root).</param>
+		/// <param name="neededPaths">Relative paths (with '/') that must exist.</param>
 		public static RemovalReport Remove(string root, ISet<string> neededPaths)
 		{
 			if (!Directory.Exists(root))
@@ -26,7 +26,7 @@ namespace CelesteAndroid.Steam
 			{
 				string full = Path.GetFullPath(file);
 				if (!full.StartsWith(fullRoot, StringComparison.Ordinal))
-					continue; // nunca mexe fora da raiz
+					continue; // never touch anything outside the root
 				string relative = full.Substring(fullRoot.Length).Replace(Path.DirectorySeparatorChar, '/');
 				if (neededPaths.Contains(relative))
 					continue;
@@ -34,7 +34,7 @@ namespace CelesteAndroid.Steam
 				File.Delete(full);
 				files++;
 			}
-			// Pastas vazias, das mais fundas para as mais rasas.
+			// Empty folders, deepest first.
 			var all = new List<string>(Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories));
 			all.Sort((a, b) => b.Length.CompareTo(a.Length));
 			foreach (string dir in all)

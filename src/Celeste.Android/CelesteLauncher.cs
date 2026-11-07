@@ -17,21 +17,21 @@ namespace CelesteAndroid
 			string gameDir = GameInstaller.GameDir(context);
 			Log.Info(GameActivity.LogTag, $"Iniciando Celeste de {gameDir}");
 
-			// Ver CelesteAndroid.HostConfig (Celeste.Android.Patches).
+			// See CelesteAndroid.HostConfig (Celeste.Android.Patches).
 			AppContext.SetData("CelesteAndroid.Platform", "Android");
 			AppContext.SetData("CelesteAndroid.PrefPath", GameInstaller.UserDir(context));
 			AppContext.SetData("CelesteAndroid.BackgroundPath", GameInstaller.BackgroundPng(context));
 			AppContext.SetData("CelesteAndroid.Host", "android");
-			// Opções da tela "Port settings" (renderer, limite de quadros, overlay, ajuste de tela...).
+			// Options from the "Port settings" screen (renderer, frame cap, overlay, screen fit...).
 			PortSettings.ApplyToAppContext(context);
 
-			// O FNA resolve o Content relativo ao diretório de trabalho no Android.
+			// On Android, FNA resolves Content relative to the working directory.
 			AppContext.SetData("APP_CONTEXT_BASE_DIRECTORY", gameDir + Path.DirectorySeparatorChar);
 			Environment.CurrentDirectory = gameDir;
 
 			Assembly celeste = AssemblyLoadContext.Default.LoadFromAssemblyPath(GameInstaller.PatchedDll(context));
 
-			// Engine.AssemblyDirectory vem de Assembly.Location, que não aponta para o jogo.
+			// Engine.AssemblyDirectory comes from Assembly.Location, which does not point at the game.
 			celeste.GetType("Monocle.Engine", throwOnError: true)!
 				.GetField("AssemblyDirectory", BindingFlags.NonPublic | BindingFlags.Static)!
 				.SetValue(null, gameDir);

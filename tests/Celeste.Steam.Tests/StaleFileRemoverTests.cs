@@ -33,9 +33,9 @@ namespace CelesteAndroid.Steam.Tests
 			dir.Write("Celeste.exe", 100);
 			dir.Write("Content/Graphics/a.data", 50);
 			dir.Write("Content/Dialog/english.txt", 5);
-			dir.Write("Celeste.bin.x86_64", 70);            // launcher de uma instalação anterior
-			dir.Write("lib64/libfmod.so.10", 30);           // nativo antigo
-			dir.Write("Content/Graphics/old-version.data", 40); // arquivo de uma versão antiga do jogo
+			dir.Write("Celeste.bin.x86_64", 70);            // launcher from a previous install
+			dir.Write("lib64/libfmod.so.10", 30);           // old native lib
+			dir.Write("Content/Graphics/old-version.data", 40); // file from an old version of the game
 			dir.Write("notes.tmp", 1);
 
 			var needed = new HashSet<string> { "Celeste.exe", "Content/Graphics/a.data", "Content/Dialog/english.txt" };

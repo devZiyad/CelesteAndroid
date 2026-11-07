@@ -11,7 +11,7 @@ using Xunit;
 
 namespace CelesteAndroid.Steam.Tests
 {
-	/// <summary>Conteúdo determinístico por (arquivo, offset): serve de "Steam" falsa e de fonte dos hashes do manifesto.</summary>
+	/// <summary>Deterministic content per (file, offset): serves as a fake "Steam" and as the source of the manifest hashes.</summary>
 	internal sealed class FakeDepot : IChunkSource
 	{
 		public const int ChunkSize = 1000;
@@ -59,9 +59,9 @@ namespace CelesteAndroid.Steam.Tests
 		private static ManifestSnapshot Manifest(FakeDepot depot, ulong id, params ManifestFile[] files) =>
 			new(504230, 504233, id, "public", files.Concat(new[]
 			{
-				depot.File("FNA.dll", 500),               // só para validar o build; não é necessário e não deve ser baixado
-				depot.File("lib64/libfmod.so.10", 2500),  // nativo: pulado
-				depot.File("Celeste.bin.x86_64", 1200),   // launcher: pulado
+				depot.File("FNA.dll", 500),               // only to validate the build; not needed and must not be downloaded
+				depot.File("lib64/libfmod.so.10", 2500),  // native: skipped
+				depot.File("Celeste.bin.x86_64", 1200),   // launcher: skipped
 			}).ToList());
 
 		private static (ManifestSnapshot Manifest, FakeDepot Depot) Game(int version = 1, ulong id = 1)
@@ -90,13 +90,13 @@ namespace CelesteAndroid.Steam.Tests
 			Assert.Equal(sel.Needed.Count, r.Files);
 			Assert.Equal(sel.NeededBytes, r.Bytes);
 			Assert.Equal(3, r.SkippedFiles);
-			// Só os arquivos necessários estão no disco, com o conteúdo certo.
+			// Only the needed files are on disk, with the right content.
 			string game = dir.Combine("game");
 			Assert.Equal(sel.Needed.Select(f => f.Path).OrderBy(x => x, StringComparer.Ordinal),
 				Directory.EnumerateFiles(game, "*", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(game, f).Replace('\\', '/')).OrderBy(x => x, StringComparer.Ordinal));
 			foreach (ManifestFile f in sel.Needed)
 				Assert.Equal(f.Sha1, f.Size == 0 ? new string('0', 40) : Convert.ToHexString(SHA1.HashData(File.ReadAllBytes(Path.Combine(game, f.Path)))));
-			// Nada de chunks de arquivos pulados.
+			// No chunks of skipped files.
 			Assert.DoesNotContain(depot.Requested, id => id.StartsWith("lib64/") || id.StartsWith("Celeste.bin") || id.StartsWith("FNA.dll"));
 		}
 
@@ -111,7 +111,7 @@ namespace CelesteAndroid.Steam.Tests
 			Assert.False(File.Exists(dir.Combine("steam/resume.json.tmp")));
 			Assert.Empty(Directory.EnumerateFiles(dir.Path, "*.tmp", SearchOption.AllDirectories));
 			Assert.Empty(Directory.EnumerateFiles(dir.Path, "*.part", SearchOption.AllDirectories));
-			// A única cópia do jogo é a da pasta final: o total em disco é exatamente o conjunto necessário.
+			// The only copy of the game is the one in the final folder: the total on disk is exactly the needed set.
 			long onDisk = Directory.EnumerateFiles(dir.Path, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
 			Assert.Equal(FileSelection.Select(m).NeededBytes, onDisk);
 		}
@@ -128,8 +128,8 @@ namespace CelesteAndroid.Steam.Tests
 			Assert.True(File.Exists(dir.Combine("steam/resume.json")), "resume state is kept after a failure");
 
 			var second = new FakeDepot();
-			ManifestSnapshot m2 = Game().Manifest; // mesmo manifesto (mesmos ids de chunk)
-			// A fonte do segundo round precisa conhecer os mesmos chunks:
+			ManifestSnapshot m2 = Game().Manifest; // same manifest (same chunk ids)
+			// The second round's source needs to know the same chunks:
 			ManifestSnapshot rebuilt = Manifest(second, 1,
 				second.File("Celeste.exe", 3500), second.File("Content/Graphics/a.data", 2500),
 				second.File("Content/Graphics/b.data", 999), second.File("Content/Dialog/english.txt", 10), second.File("Content/empty.bin", 0));
@@ -145,7 +145,7 @@ namespace CelesteAndroid.Steam.Tests
 		{
 			using var dir = new TempDir();
 			(ManifestSnapshot m, FakeDepot depot) = Game();
-			// Arquivo com o tamanho certo e conteúdo errado, sem estado de retomada.
+			// A file with the right size and wrong content, with no resume state.
 			string path = dir.Combine("game/Content/Graphics/a.data");
 			Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 			File.WriteAllBytes(path, new byte[2500]);
@@ -178,7 +178,7 @@ namespace CelesteAndroid.Steam.Tests
 			(ManifestSnapshot v1, FakeDepot d1) = Game(version: 1, id: 1);
 			await Installer(dir, d1).InstallAsync(v1, CancellationToken.None);
 
-			// Sobras de instalações antigas (arquivos pulados e um arquivo que saiu do jogo).
+			// Leftovers from old installs (skipped files and a file that left the game).
 			dir.Write("game/Celeste.bin.x86_64", 77);
 			dir.Write("game/lib64/libfmod.so.10", 33);
 			dir.Write("game/Content/Graphics/removed-in-v2.data", 12);
@@ -186,8 +186,8 @@ namespace CelesteAndroid.Steam.Tests
 			var d2 = new FakeDepot();
 			ManifestSnapshot v2 = Manifest(d2, 2,
 				d2.File("Celeste.exe", 3600, 2),                 // mudou
-				d2.File("Content/Graphics/a.data", 2500, 1),     // igual ao v1
-				d2.File("Content/Dialog/english.txt", 10, 1));   // igual ao v1 (b.data e empty.bin saíram)
+				d2.File("Content/Graphics/a.data", 2500, 1),     // same as v1
+				d2.File("Content/Dialog/english.txt", 10, 1));   // same as v1 (b.data and empty.bin are gone)
 			InstallResult r = await Installer(dir, d2).InstallAsync(v2, CancellationToken.None);
 
 			string game = dir.Combine("game");
@@ -198,7 +198,7 @@ namespace CelesteAndroid.Steam.Tests
 			Assert.False(Directory.Exists(Path.Combine(game, "lib64")));
 			ManifestFile exe = v2.Files.Single(f => f.Path == "Celeste.exe");
 			Assert.Equal(exe.Sha1, Convert.ToHexString(SHA1.HashData(File.ReadAllBytes(Path.Combine(game, "Celeste.exe")))));
-			// Só o que mudou foi baixado de novo.
+			// Only what changed was downloaded again.
 			Assert.All(d2.Requested, id => Assert.StartsWith("Celeste.exe@2@", id));
 		}
 

@@ -11,10 +11,10 @@ using SteamKit2.Internal;
 
 namespace CelesteAndroid.Steam
 {
-	/// <summary>Resultado de uma autenticação: o nome da conta e o refresh token (a única coisa que o app guarda, criptografada).</summary>
+	/// <summary>The result of an authentication: the account name and the refresh token (the only thing the app stores, encrypted).</summary>
 	public sealed record SteamAuthResult(string AccountName, string RefreshToken);
 
-	/// <summary>Quem recebe o desafio de QR (renova de tempos em tempos) e o aviso de "aprove no app da Steam".</summary>
+	/// <summary>Whoever receives the QR challenge (refreshed from time to time) and the "approve in the Steam app" notice.</summary>
 	public interface ISteamLoginEvents
 	{
 		void OnQrChallenge(string challengeUrl);
@@ -28,14 +28,14 @@ namespace CelesteAndroid.Steam
 	}
 
 	/// <summary>
-	/// Sessão com a Steam (SteamKit2): conexão por WebSocket, login (QR, usuário/senha com aprovação no app, ou refresh token),
-	/// verificação de posse do app e download do manifesto/chunks do depot. Nunca registra senha, token ou chave de depot.
+	/// Session with Steam (SteamKit2): connection, login (QR, username/password with approval in the app, or refresh token),
+	/// app ownership check and download of the depot manifest/chunks. Never logs a password, token or depot key.
 	/// </summary>
 	public sealed class SteamSession : IDisposable
 	{
 		public const uint AppId = 504230;
 		public const uint LinuxDepotId = 504233;
-		/// <summary>Só o ramo público padrão: nunca o beta "opengl" nem outro.</summary>
+		/// <summary>Only the default public branch: never the "opengl" beta or any other.</summary>
 		public const string Branch = "public";
 
 		private readonly SteamClient client;
@@ -62,7 +62,7 @@ namespace CelesteAndroid.Steam
 
 			public void WriteLine(string category, string msg)
 			{
-				// Só em builds de depuração e sem nada que lembre segredo.
+				// Debug builds only, and nothing that looks like a secret.
 				if (msg.Contains("token", StringComparison.OrdinalIgnoreCase) || msg.Contains("password", StringComparison.OrdinalIgnoreCase)
 					|| msg.Contains("refresh", StringComparison.OrdinalIgnoreCase) || msg.Contains("access", StringComparison.OrdinalIgnoreCase))
 					return;
@@ -95,12 +95,12 @@ namespace CelesteAndroid.Steam
 			IsConnected = false;
 			log($"steam: disconnected (user initiated: {cb.UserInitiated})");
 			if (cb.UserInitiated)
-				return; // um Disconnect() nosso (troca de servidor) não derruba a tentativa seguinte
+				return; // a Disconnect() of our own (switching servers) must not fail the next attempt
 			connected.TrySetException(new SteamException("Disconnected from Steam."));
 			loggedOn.TrySetException(new SteamException("Disconnected from Steam."));
 		}
 
-		#region Conexão
+		#region Connection
 
 		public async Task ConnectAsync(CancellationToken ct)
 		{
@@ -112,7 +112,7 @@ namespace CelesteAndroid.Steam
 					catch (OperationCanceledException) { break; }
 				}
 			});
-			// Cada Connect() usa o próximo servidor da lista: se um não responde (porta bloqueada, servidor fora do ar), tenta o seguinte.
+			// Each Connect() uses the next server in the list: if one does not answer (blocked port, server down), try the next.
 			const int attempts = 8;
 			for (int attempt = 1; ; attempt++)
 			{
@@ -153,13 +153,13 @@ namespace CelesteAndroid.Steam
 		};
 
 		/// <summary>
-		/// Login por QR: <paramref name="events"/> recebe a URL do desafio (a que o botão "Abrir no app da Steam" abre e que vira o
-		/// QR code); a aprovação no app da Steam do mesmo celular (ou de outro aparelho) conclui o login.
+		/// QR login: <paramref name="events"/> receives the challenge URL (the one the "Open in Steam app" button opens and that becomes the
+		/// QR code); approval in the Steam app on the same phone (or another device) completes the login.
 		/// </summary>
 		public async Task<SteamAuthResult> LoginWithQrAsync(ISteamLoginEvents events, CancellationToken ct)
 		{
 			QrAuthSession session = await client.Authentication.BeginAuthSessionViaQRAsync(Details()).ConfigureAwait(false);
-			session.ChallengeURLChanged = () => events.OnQrChallenge(session.ChallengeURL); // a Steam renova a URL de tempos em tempos
+			session.ChallengeURLChanged = () => events.OnQrChallenge(session.ChallengeURL); // Steam refreshes the URL from time to time
 			events.OnQrChallenge(session.ChallengeURL);
 			log("steam: QR challenge issued, waiting for approval in the Steam app");
 			AuthPollResult result = await session.PollingWaitForResultAsync(ct).ConfigureAwait(false);
@@ -170,8 +170,8 @@ namespace CelesteAndroid.Steam
 		private CredentialsAuthSession? credentialsSession;
 
 		/// <summary>
-		/// Login por usuário/senha: depois da senha espera a aprovação por push no app da Steam; se o usuário preferir, um código
-		/// do Steam Guard digitado vai por <see cref="SubmitGuardCodeAsync"/> (último recurso). A senha só vive em memória, nesta chamada.
+		/// Username/password login: after the password it waits for the push approval in the Steam app; if the user prefers, a code
+		/// typed from Steam Guard goes through <see cref="SubmitGuardCodeAsync"/> (last resort). The password only lives in memory, during this call.
 		/// </summary>
 		public async Task<SteamAuthResult> LoginWithCredentialsAsync(string username, string password, ISteamLoginEvents events, CancellationToken ct)
 		{
@@ -195,7 +195,7 @@ namespace CelesteAndroid.Steam
 			}
 		}
 
-		/// <summary>Código do app autenticador (ou do e-mail) digitado enquanto o login espera a aprovação.</summary>
+		/// <summary>Code from the authenticator app (or the email) typed while the login waits for approval.</summary>
 		public async Task SubmitGuardCodeAsync(string code, bool isEmailCode)
 		{
 			CredentialsAuthSession session = credentialsSession ?? throw new SteamException("No sign-in is waiting for a code.");
@@ -210,13 +210,13 @@ namespace CelesteAndroid.Steam
 			public Task<bool> AcceptDeviceConfirmationAsync()
 			{
 				events.OnWaitingForDeviceApproval();
-				return Task.FromResult(true); // espera o push no app da Steam; o código digitado continua disponível
+				return Task.FromResult(true); // waits for the push in the Steam app; a typed code is still available
 			}
 
 			public Task<string> GetDeviceCodeAsync(bool previousCodeWasIncorrect)
 			{
 				events.OnNeedGuardCode(false, null, previousCodeWasIncorrect);
-				return new TaskCompletionSource<string>().Task; // o código chega por SubmitGuardCodeAsync
+				return new TaskCompletionSource<string>().Task; // the code arrives through SubmitGuardCodeAsync
 			}
 
 			public Task<string> GetEmailCodeAsync(string email, bool previousCodeWasIncorrect)
@@ -226,7 +226,7 @@ namespace CelesteAndroid.Steam
 			}
 		}
 
-		/// <summary>Entra na Steam com o refresh token guardado (sem senha, sem interação).</summary>
+		/// <summary>Logs on to Steam with the stored refresh token (no password, no interaction).</summary>
 		public async Task LogOnAsync(string accountName, string refreshToken, CancellationToken ct)
 		{
 			loggedOn = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -247,9 +247,9 @@ namespace CelesteAndroid.Steam
 
 		#endregion
 
-		#region Posse e manifesto
+		#region Ownership and manifest
 
-		/// <summary>Confirma que a conta tem uma licença (própria ou de compartilhamento familiar) que inclui o app 504230.</summary>
+		/// <summary>Confirms the account has a license (own or family-shared) that includes app 504230.</summary>
 		public async Task<bool> OwnsGameAsync(CancellationToken ct)
 		{
 			SteamApps.LicenseListCallback list = licenses ?? throw new SteamException("Not logged on.");
@@ -272,12 +272,12 @@ namespace CelesteAndroid.Steam
 		private byte[]? depotKey;
 
 		/// <summary>
-		/// Descobre o manifesto do depot Linux no ramo público (recusa qualquer outro depot/ramo), baixa-o e o devolve como
-		/// <see cref="ManifestSnapshot"/>, junto com a fonte de chunks para o <see cref="DepotInstaller"/>.
+		/// Finds the Linux depot's manifest on the public branch (refuses any other depot/branch), downloads it and returns it as a
+		/// <see cref="ManifestSnapshot"/>, together with the chunk source for the <see cref="DepotInstaller"/>.
 		/// </summary>
 		public async Task<(ManifestSnapshot Manifest, IChunkSource Chunks)> GetManifestAsync(CancellationToken ct)
 		{
-			// Chave do depot: também prova a posse (AccessDenied se a conta não tem o jogo).
+			// The depot key: also proves ownership (AccessDenied if the account does not have the game).
 			SteamApps.DepotKeyCallback key = await apps.GetDepotDecryptionKey(LinuxDepotId, AppId).ToTask().ConfigureAwait(false);
 			if (key.Result != EResult.OK)
 				throw new SteamException($"Steam did not grant the depot key for {LinuxDepotId}: {key.Result} (does this account own Celeste?).");
@@ -336,7 +336,7 @@ namespace CelesteAndroid.Steam
 			return servers;
 		}
 
-		/// <summary>Baixa chunks do CDN, trocando de servidor e pedindo token de CDN quando necessário.</summary>
+		/// <summary>Downloads chunks from the CDN, switching servers and requesting a CDN token when needed.</summary>
 		private sealed class SteamChunkSource : IChunkSource
 		{
 			private readonly SteamSession session;

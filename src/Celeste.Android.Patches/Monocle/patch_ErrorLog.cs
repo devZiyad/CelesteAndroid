@@ -1,4 +1,4 @@
-#pragma warning disable CS0626 // extern sem atributo: o MonoMod troca por orig_*
+#pragma warning disable CS0626 // extern without an attribute: MonoMod swaps it for orig_*
 using System;
 using CelesteAndroid;
 using MonoMod;
@@ -11,8 +11,8 @@ namespace Monocle
 		public static extern void orig_Open();
 
 		/// <summary>
-		/// O original abre o errorLog.txt com o programa padrão do sistema (Process.Start), o que não existe no Android
-		/// (o log continua sendo gravado por ErrorLog.Write). No desktop chama o original sem deixar uma falha
+		/// The original opens errorLog.txt with the system default program (Process.Start), which does not exist on Android
+		/// (the log is still written by ErrorLog.Write). On desktop it calls the original without letting a
 		/// do Process.Start derrubar o tratamento do crash.
 		/// </summary>
 		public static void Open()

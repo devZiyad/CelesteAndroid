@@ -1,4 +1,4 @@
-#pragma warning disable CS0626 // extern sem atributo: o MonoMod troca por orig_*
+#pragma warning disable CS0626 // extern without an attribute: MonoMod swaps it for orig_*
 using CelesteAndroid;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -20,7 +20,7 @@ namespace Celeste
 		{
 			orig_Initialize();
 
-			// VSync do port (sobrepõe o do Settings do jogo no início; o menu de vídeo continua valendo depois).
+			// The port's VSync (overrides the game's Settings value at startup; the video menu still applies afterwards).
 			bool vsync = PortConfig.VSync;
 			Settings.Instance.VSync = vsync;
 			if (Engine.Graphics.SynchronizeWithVerticalRetrace != vsync)

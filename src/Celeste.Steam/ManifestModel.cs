@@ -7,10 +7,10 @@ using System.Text.Json.Serialization;
 
 namespace CelesteAndroid.Steam
 {
-	/// <summary>Um chunk de um arquivo do depot (o que o CDN entrega, comprimido e criptografado).</summary>
+	/// <summary>A chunk of a depot file (what the CDN delivers, compressed and encrypted).</summary>
 	public sealed record ManifestChunk(string Id, long Offset, int UncompressedLength, int CompressedLength, uint Checksum);
 
-	/// <summary>Um arquivo do manifesto. <see cref="Path"/> usa sempre '/' como separador, relativo à raiz do depot.</summary>
+	/// <summary>A manifest file. <see cref="Path"/> always uses '/' as the separator, relative to the depot root.</summary>
 	public sealed record ManifestFile(string Path, long Size, int Flags, string Sha1, IReadOnlyList<ManifestChunk> Chunks)
 	{
 		/// <summary>EDepotFileFlag.Directory.</summary>
@@ -23,8 +23,8 @@ namespace CelesteAndroid.Steam
 	}
 
 	/// <summary>
-	/// O manifesto "gravado" de um depot (nomes, tamanhos, hashes e chunks; nenhuma chave): é o que os testes usam
-	/// no lugar da Steam e o formato em que o app pode gravar o manifesto real para virar fixture.
+	/// A "recorded" depot manifest (names, sizes, hashes and chunks; no keys): what the tests use
+	/// in place of Steam, and the format in which the app can record the real manifest to become a fixture.
 	/// </summary>
 	public sealed record ManifestSnapshot(uint AppId, uint DepotId, ulong ManifestId, string Branch, IReadOnlyList<ManifestFile> Files)
 	{
@@ -40,7 +40,7 @@ namespace CelesteAndroid.Steam
 		{
 			ManifestSnapshot snapshot = JsonSerializer.Deserialize<ManifestSnapshot>(json, Json)
 				?? throw new InvalidDataException("Manifest JSON is empty.");
-			// Normaliza caminhos vindos de qualquer fonte (Windows usa '\').
+			// Normalizes paths from any source (Windows uses '\').
 			return snapshot with
 			{
 				Files = snapshot.Files.Select(f => f with { Path = ManifestFile.NormalizePath(f.Path) }).ToList(),

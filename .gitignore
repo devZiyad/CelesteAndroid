@@ -1,14 +1,14 @@
-# Arquivos do jogo (propriedade da Maddy Makes Games) - NUNCA commitar
+# Game files (owned by Maddy Makes Games) - NEVER commit
 /Celeste/
 *.exe
 Content/
 
-# Libs proprietárias (FMOD) - cada pessoa baixa a própria
+# Proprietary libs (FMOD) - everyone downloads their own
 /fmod/
 libfmod*.so
 fmod*.dll
 
-# Repositórios de referência (clonados, não fazem parte do projeto)
+# Reference repositories (cloned, not part of the project)
 /refs/
 
 # Build
@@ -20,14 +20,14 @@ obj/
 .vs/
 *.user
 
-# fnalibs baixadas (ver scripts/fetch-fnalibs.sh)
+# Downloaded fnalibs (see scripts/fetch-fnalibs.sh)
 /natives/
 /build/
 
-# Arte extraída do jogo do usuário (scripts/generate-game-art.sh)
+# Art extracted from the user's game files (scripts/generate-game-art.sh)
 /src/Celeste.Android/GameArt/
 
-# Arte oficial fornecida pelo usuário (logo etc.)
+# Official art supplied by the user (logo etc.)
 /art/
 
 # Local JDK selection (SDKMAN)

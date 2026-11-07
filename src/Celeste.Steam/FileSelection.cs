@@ -6,24 +6,24 @@ namespace CelesteAndroid.Steam
 {
 	public enum SelectionKind
 	{
-		/// <summary>O port precisa deste arquivo (Celeste.exe e Content/).</summary>
+		/// <summary>The port needs this file (Celeste.exe and Content/).</summary>
 		Needed,
 		Directory,
 		/// <summary>Launchers do Linux (script "Celeste", Celeste.bin.x86 / x86_64).</summary>
 		SkippedLauncher,
 		/// <summary>Bibliotecas nativas x86/x86_64 (lib/, lib64/, *.so).</summary>
 		SkippedNative,
-		/// <summary>Steamworks e outras libs nativas da Steam.</summary>
+		/// <summary>Steamworks and other native Steam libs.</summary>
 		SkippedSteamworks,
-		/// <summary>Runtime Mono e configs (mscorlib.dll, System*.dll, Mono*.dll, monoconfig...).</summary>
+		/// <summary>The Mono runtime and configs (mscorlib.dll, System*.dll, Mono*.dll, monoconfig...).</summary>
 		SkippedRuntime,
-		/// <summary>Qualquer outra coisa que o port não usa (FNA.dll, ícone, gamecontrollerdb.txt...).</summary>
+		/// <summary>Anything else the port does not use (FNA.dll, icon, gamecontrollerdb.txt...).</summary>
 		SkippedOther,
 	}
 
 	public sealed record FileClassification(ManifestFile File, SelectionKind Kind);
 
-	/// <summary>O resultado da seleção: o conjunto necessário (o único que vai para o disco) e o que foi pulado.</summary>
+	/// <summary>The selection result: the needed set (the only one that goes to disk) and what was skipped.</summary>
 	public sealed class SelectionResult
 	{
 		public IReadOnlyList<ManifestFile> Needed { get; }
@@ -43,8 +43,8 @@ namespace CelesteAndroid.Steam
 	}
 
 	/// <summary>
-	/// Decide o que baixar do depot Linux: o port só usa Celeste.exe (que ele corrige com MonoMod) e a pasta Content/.
-	/// Tudo o mais (launchers, nativos, Steamworks, runtime Mono, FNA.dll...) é pulado: o app traz o próprio FNA/SDL/FMOD.
+	/// Decides what to download from the Linux depot: the port only uses Celeste.exe (which it patches with MonoMod) and the Content/ folder.
+	/// Everything else (launchers, natives, Steamworks, the Mono runtime, FNA.dll...) is skipped: the app ships its own FNA/SDL/FMOD.
 	/// </summary>
 	public static class FileSelection
 	{
@@ -92,8 +92,8 @@ namespace CelesteAndroid.Steam
 		}
 
 		/// <summary>
-		/// Garante que é mesmo o build FNA do Linux (Celeste.exe + FNA.dll no manifesto): o depot do Windows ou um beta
-		/// diferente é recusado antes de baixar qualquer coisa.
+		/// Makes sure this really is the Linux FNA build (Celeste.exe + FNA.dll in the manifest): the Windows depot or a different
+		/// beta is refused before downloading anything.
 		/// </summary>
 		public static void ValidateIsFnaBuild(ManifestSnapshot manifest)
 		{

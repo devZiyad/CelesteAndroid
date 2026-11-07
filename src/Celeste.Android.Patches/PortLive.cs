@@ -6,8 +6,8 @@ using Monocle;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Aplica uma opção do port assim que ela muda no menu PORT, sem reiniciar. Overlay, canto, limite de quadros e
-	/// os modos de tela são lidos a cada quadro; o resto precisa de um empurrão.
+	/// Applies a port option as soon as it changes in the PORT menu, without restarting. Overlay, corner, frame cap and
+	/// the screen modes are read every frame; the rest needs a nudge.
 	/// </summary>
 	public static class PortLive
 	{
@@ -15,7 +15,7 @@ namespace CelesteAndroid
 		{
 			if (setting == PortSettingsCatalog.ScreenFit || setting == PortSettingsCatalog.IntegerScaling)
 			{
-				// Recalcula Viewport/ScreenMatrix com o novo encaixe (UpdateView é privado no Engine).
+				// Recomputes Viewport/ScreenMatrix with the new fit (UpdateView is private in Engine).
 				typeof(Engine).GetMethod("UpdateView", BindingFlags.Instance | BindingFlags.NonPublic)?.Invoke(Engine.Instance, null);
 			}
 			else if (setting == PortSettingsCatalog.VSync)

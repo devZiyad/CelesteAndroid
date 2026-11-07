@@ -17,7 +17,7 @@ using Uri = Android.Net.Uri;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Tela inicial: key art do jogo, importação dos arquivos do jogo e botão de jogar.
+	/// Home screen: the game's key art, game file import and the play button.
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.LauncherActivity",
@@ -67,7 +67,7 @@ namespace CelesteAndroid
 			HideSystemBars();
 			LoadArt();
 
-			// "Splash": a arte aparece sozinha e o painel entra logo depois.
+			// "Splash": the art appears alone and the panel slides in right after.
 			panel.Alpha = 0f;
 			panel.TranslationX = -Dp(32);
 			panel.Animate()!.Alpha(1f).TranslationX(0f).SetStartDelay(650).SetDuration(550)
@@ -90,14 +90,14 @@ namespace CelesteAndroid
 			RefreshState();
 			LogDataInventory();
 
-			// Desenvolvimento: arquivos já copiados por scripts/deploy-android.sh; só patch + fundo.
+			// Development: files already copied by scripts/deploy-android.sh; only patch + background.
 			// adb shell am start -n org.devziyad.celeste/.LauncherActivity --ez repatch true
 			if (!busy && Intent!.GetBooleanExtra("repatch", false))
 			{
 				Intent.RemoveExtra("repatch");
 				RunInstall(_ => { });
 			}
-			// Desenvolvimento (scripts/deploy-android.sh --play): abre o jogo direto.
+			// Development (scripts/deploy-android.sh --play): opens the game directly.
 			if (!busy && Intent!.GetBooleanExtra("autoplay", false))
 			{
 				Intent.RemoveExtra("autoplay");
@@ -107,7 +107,7 @@ namespace CelesteAndroid
 					Play();
 				}
 			}
-			// Desenvolvimento (adb shell am start ... --ez steam true [--ez recordManifest true]): abre a instalação pela Steam.
+			// Development (adb shell am start ... --ez steam true [--ez recordManifest true]): opens the Steam install.
 			if (!busy && Intent!.GetBooleanExtra("steam", false))
 			{
 				bool record = Intent.GetBooleanExtra(SteamActivity.ExtraRecordManifest, false);
@@ -120,7 +120,7 @@ namespace CelesteAndroid
 				if (showError) steamIntent.PutExtra(SteamActivity.ExtraShowError, true);
 				StartActivityForResult(steamIntent, RequestSteam);
 			}
-			// APK pessoal: o jogo já vem dentro do APK; instala sozinho na primeira abertura.
+			// Personal APK: the game already ships inside the APK; installs itself on first launch.
 			else if (!busy && !GameInstaller.IsInstalled(this) && GameInstaller.HasEmbeddedGame(this))
 			{
 				RunInstall(installer => installer.ImportEmbedded());
@@ -128,9 +128,9 @@ namespace CelesteAndroid
 		}
 
 		/// <summary>
-		/// Registra o tamanho dos dados do app (files/ e shared_prefs/, com o nome de cada arquivo): prova, no logcat,
-		/// que um deploy não os apagou. "android.app.ActivityThread.IDS.xml" é do próprio Android (contador do
-		/// framework, reescrito a cada atualização) e fica de fora.
+		/// Logs the size of the app's data (files/ and shared_prefs/, with each file's name): proof, in logcat,
+		/// that a deploy did not erase it. "android.app.ActivityThread.IDS.xml" belongs to Android itself (a framework
+		/// counter, rewritten on every update) and is left out.
 		/// </summary>
 		private void LogDataInventory()
 		{
@@ -199,7 +199,7 @@ namespace CelesteAndroid
 			panel.SetPadding(Dp(56), Dp(12), Dp(24), Dp(12));
 			root.AddView(panel, new FrameLayout.LayoutParams(Dp(460), ViewGroup.LayoutParams.MatchParent));
 
-			// Logo do jogo (art/logo.png → GameArt) ou, sem ele, o nome em texto.
+			// The game's logo (art/logo.png → GameArt) or, without it, the name as text.
 			int logoId = Resources!.GetIdentifier("celeste_logo", "drawable", PackageName);
 			if (logoId != 0)
 			{
@@ -283,7 +283,7 @@ namespace CelesteAndroid
 
 		private void LoadArt()
 		{
-			// Arte embutida no build (GameArt/) ou, na versão compartilhável, a key art do jogo importado.
+			// Art embedded in the build (GameArt/) or, in the shareable build, the imported game's key art.
 			if (Resources!.GetIdentifier("celeste_art", "drawable", PackageName) != 0)
 			{
 				art.SetImageResource(Resource.Drawable.launcher_art);
@@ -335,7 +335,7 @@ namespace CelesteAndroid
 
 		#endregion
 
-		#region Estado e ações
+		#region State and actions
 
 		private void RefreshState()
 		{
@@ -349,7 +349,7 @@ namespace CelesteAndroid
 			deleteGame.Enabled = !busy;
 			deleteGame.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
 			deleteSeparator.Visibility = deleteGame.Visibility;
-			// A tela é baixa (~360dp): durante a instalação a barra de progresso ocupa o lugar dos links.
+			// The screen is short (~360dp): during installation the progress bar takes the links' place.
 			links.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
 			links2.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
 			steamButton.Text = installed ? "Update from Steam" : "Install from Steam";
@@ -374,7 +374,7 @@ namespace CelesteAndroid
 			StartActivity(intent);
 		}
 
-		/// <summary>Instala (ou atualiza) o jogo pela Steam; o download retoma de onde parou.</summary>
+		/// <summary>Installs (or updates) the game from Steam; the download resumes where it stopped.</summary>
 		private void StartSteam(bool record)
 		{
 			var intent = new Intent(this, typeof(SteamActivity));
@@ -397,7 +397,7 @@ namespace CelesteAndroid
 					return $"✓  Game files deleted ({freed / (1024 * 1024)} MB freed)";
 				}));
 
-		/// <summary>Confirmação no mesmo visual do launcher: foco visível, Cancel focado primeiro, A confirma e B cancela.</summary>
+		/// <summary>Confirmation in the launcher's own look: visible focus, Cancel focused first, A confirms and B cancels.</summary>
 		private void ShowConfirm(string title, string message, string confirmText, Action onConfirm)
 		{
 			if (confirmOverlay != null) return;
@@ -482,7 +482,7 @@ namespace CelesteAndroid
 				RunJob(installer => $"✓  Imported {installer.ImportSaves(uri)} save file(s)");
 		}
 
-		/// <summary>Importação do jogo: cópia → patch → fundo.</summary>
+		/// <summary>Game import: copy → patch → background.</summary>
 		private void RunInstall(Action<GameInstaller> import)
 		{
 			RunJob(installer =>
@@ -495,7 +495,7 @@ namespace CelesteAndroid
 			});
 		}
 
-		/// <summary>Roda uma tarefa do instalador fora da thread de UI, com progresso; devolve a mensagem de sucesso.</summary>
+		/// <summary>Runs an installer task off the UI thread, with progress; returns the success message.</summary>
 		private void RunJob(Func<GameInstaller, string> job)
 		{
 			busy = true;

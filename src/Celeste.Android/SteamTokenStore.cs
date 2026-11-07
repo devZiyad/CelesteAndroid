@@ -9,8 +9,8 @@ using Javax.Crypto.Spec;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Guarda a sessão da Steam (nome da conta + refresh token) criptografada com uma chave AES-GCM do Android Keystore
-	/// (a chave nunca sai do chip/TEE). A senha NUNCA é guardada; o arquivo só tem texto cifrado.
+	/// Stores the Steam session (account name + refresh token) encrypted with an AES-GCM key from the Android Keystore
+	/// (the key never leaves the chip/TEE). The password is NEVER stored; the file only holds ciphertext.
 	/// </summary>
 	public static class SteamTokenStore
 	{
@@ -71,7 +71,7 @@ namespace CelesteAndroid
 			}
 			catch (Exception)
 			{
-				// Chave invalidada ou arquivo corrompido: trata como "sem sessão" (o usuário entra de novo).
+				// Invalidated key or corrupted file: treat it as "no session" (the user signs in again).
 				Clear(context);
 				return null;
 			}

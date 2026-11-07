@@ -7,14 +7,14 @@ using MonoMod;
 namespace CelesteAndroid.Patcher
 {
 	/// <summary>
-	/// Gera um Celeste.dll que roda no .NET moderno a partir do Celeste.exe original do usuário.
+	/// Generates a Celeste.dll that runs on modern .NET from the user's original Celeste.exe.
 	/// </summary>
 	public static class CelestePatcher
 	{
 		/// <param name="celesteExe">Celeste.exe original (build FNA).</param>
 		/// <param name="modAssembly">Celeste.Android.mm.dll.</param>
 		/// <param name="outputDll">Destino do Celeste.dll patcheado.</param>
-		/// <param name="dependencyDirs">Onde achar FNA.dll, Steamworks.NET.dll etc. (os nossos, não os do jogo).</param>
+		/// <param name="dependencyDirs">Where to find FNA.dll, Steamworks.NET.dll etc. (ours, not the game's).</param>
 		public static void Patch(string celesteExe, string modAssembly, string outputDll, IEnumerable<string> dependencyDirs, Action<string>? log = null)
 		{
 			log ??= Console.WriteLine;
@@ -24,8 +24,8 @@ namespace CelesteAndroid.Patcher
 			{
 				InputPath = celesteExe,
 				OutputPath = outputDll,
-				// Deferred: o Cecil só resolve o que usa. No Android não há mscorlib/System.Runtime como
-				// arquivos, e o modo Immediate tenta resolver os tipos de todos os atributos.
+				// Deferred: Cecil only resolves what it uses. On Android there is no mscorlib/System.Runtime as
+				// files, and Immediate mode tries to resolve the types of every attribute.
 				ReadingMode = ReadingMode.Deferred,
 				MissingDependencyThrow = false,
 			};
@@ -36,7 +36,7 @@ namespace CelesteAndroid.Patcher
 			modder.MapDependencies();
 			modder.AutoPatch();
 
-			// O Celeste.exe vem marcado como x86 (32BITREQUIRED); em ARM64/x64 isso impede o carregamento.
+			// Celeste.exe is flagged as x86 (32BITREQUIRED); on ARM64/x64 that prevents loading.
 			ModuleDefinition module = modder.Module;
 			module.Attributes &= ~(ModuleAttributes.Required32Bit | ModuleAttributes.Preferred32Bit);
 			module.Attributes |= ModuleAttributes.ILOnly;

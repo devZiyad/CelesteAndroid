@@ -1,4 +1,4 @@
-#pragma warning disable CS0626 // extern sem atributo: o MonoMod troca por orig_*
+#pragma warning disable CS0626 // extern without an attribute: MonoMod swaps it for orig_*
 using CelesteAndroid;
 
 namespace Celeste
@@ -8,8 +8,8 @@ namespace Celeste
 		public extern void orig_ApplyScreen();
 
 		/// <summary>
-		/// No Android o jogo roda sempre em tela cheia, na resolução nativa (o modo janela renderiza 320x180×escala e o
-		/// sistema estica a imagem): força Fullscreen antes do ApplyScreen original, que então segue o ramo de tela cheia.
+		/// On Android the game always runs fullscreen at the native resolution (windowed mode renders 320x180×scale and the
+		/// system stretches the image): forces Fullscreen before the original ApplyScreen, which then takes the fullscreen branch.
 		/// No desktop continua como no original.
 		/// </summary>
 		public new void ApplyScreen()

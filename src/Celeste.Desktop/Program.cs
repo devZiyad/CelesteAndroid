@@ -22,24 +22,24 @@ namespace CelesteAndroid.Desktop
 			{
 				CelestePatcher.Patch(celesteExe, modDll, patchedDll, new[] { hostDir, RuntimeEnvironment.GetRuntimeDirectory() });
 			}
-			// Usado pelo scripts/deploy-android.sh: o mesmo Celeste.dll serve para o Android.
+			// Used by scripts/deploy-android.sh: the same Celeste.dll works for Android.
 			if (Array.IndexOf(args, "--patch-only") >= 0)
 			{
 				Console.WriteLine(patchedDll);
 				return 0;
 			}
 
-			// Mesmo contrato que o app Android vai usar (ver CelesteAndroid.HostConfig).
+			// Same contract the Android app uses (see CelesteAndroid.HostConfig).
 			AppContext.SetData("CelesteAndroid.Platform", "Android");
-			// No desktop o menu de vídeo do Celeste (Fullscreen/Window Scale) fica como no original.
+			// On desktop, Celeste's video menu (Fullscreen/Window Scale) stays as in the original.
 			AppContext.SetData("CelesteAndroid.Host", "desktop");
-			// Opções do port (JSON / flags); o renderer vira o driver do FNA3D, como no Android.
+			// Port options (JSON / flags); the renderer becomes the FNA3D driver, as on Android.
 			args = PortOptions.Apply(args, hostDir);
 			if (AppContext.GetData("CelesteAndroid.Renderer") is string renderer)
 				SDL3.SDL.SDL_SetHint("FNA3D_FORCE_DRIVER", renderer.StartsWith("gl", StringComparison.OrdinalIgnoreCase) || renderer.StartsWith("opengl", StringComparison.OrdinalIgnoreCase) ? "OpenGL" : "Vulkan");
 			AppContext.SetData("CelesteAndroid.PrefPath", Path.Combine(hostDir, "userdata"));
 
-			// O FNA procura o Content relativo à pasta-base do app; apontamos para a pasta do jogo.
+			// FNA looks for Content relative to the app's base folder; we point it at the game folder.
 			AppContext.SetData("APP_CONTEXT_BASE_DIRECTORY", gameDir + Path.DirectorySeparatorChar);
 			Environment.CurrentDirectory = gameDir;
 
@@ -48,13 +48,13 @@ namespace CelesteAndroid.Desktop
 
 			Assembly celeste = AssemblyLoadContext.Default.LoadFromAssemblyName(new AssemblyName("Celeste"));
 
-			// Engine.AssemblyDirectory vem de Assembly.Location, que não aponta para o jogo (e no Android é vazio).
+			// Engine.AssemblyDirectory comes from Assembly.Location, which does not point at the game (and is empty on Android).
 			celeste.GetType("Monocle.Engine", throwOnError: true)!
 				.GetField("AssemblyDirectory", BindingFlags.NonPublic | BindingFlags.Static)!
 				.SetValue(null, gameDir);
 
-			// O Celeste.dll fica em patched/, então o runtime não procura as libs nativas (FMOD) ao lado do host.
-			// libfmodstudio depende do soname libfmod.so.10: carregamos o libfmod antes, por caminho completo.
+			// Celeste.dll lives in patched/, so the runtime does not look for the native libs (FMOD) next to the host.
+			// libfmodstudio depends on the soname libfmod.so.10: we load libfmod first, by full path.
 			NativeLibrary.TryLoad(Path.Combine(hostDir, "libfmod.so.10"), out _);
 			NativeLibrary.SetDllImportResolver(celeste, (name, asm, path) =>
 				NativeLibrary.TryLoad(Path.Combine(hostDir, "lib" + name + ".so"), out IntPtr handle) ? handle : IntPtr.Zero);
@@ -75,14 +75,14 @@ namespace CelesteAndroid.Desktop
 			if (!string.IsNullOrEmpty(env))
 				return Path.GetFullPath(env);
 
-			// Sobe a partir de bin/ até achar a pasta Celeste/ na raiz do repositório.
+			// Walks up from bin/ until it finds the Celeste/ folder at the repository root.
 			for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
 			{
 				string candidate = Path.Combine(dir.FullName, "Celeste");
 				if (File.Exists(Path.Combine(candidate, "Celeste.exe")))
 					return candidate;
 			}
-			throw new DirectoryNotFoundException("Pasta do jogo não encontrada. Use --game <pasta> ou CELESTE_GAME_DIR.");
+			throw new DirectoryNotFoundException("Game folder not found. Use --game <folder> or CELESTE_GAME_DIR.");
 		}
 
 		private static bool IsStale(string output, params string[] inputs)

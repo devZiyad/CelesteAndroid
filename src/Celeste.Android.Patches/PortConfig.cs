@@ -8,8 +8,8 @@ namespace CelesteAndroid
 	public enum OverlayCorner { TopLeft, TopRight, BottomLeft, BottomRight }
 
 	/// <summary>
-	/// Opções do port ("Port settings" no Android; JSON/flags no desktop). O host as publica no
-	/// AppContext como "CelesteAndroid.&lt;Nome&gt;" (texto); aqui são lidas e validadas.
+	/// The port's options ("Port settings" on Android; JSON/flags on desktop). The host publishes them in
+	/// AppContext as "CelesteAndroid.&lt;Name&gt;" (text); here they are read and validated.
 	/// </summary>
 	public static class PortConfig
 	{
@@ -17,12 +17,12 @@ namespace CelesteAndroid
 
 		private static string? Raw(string key) => AppContext.GetData(Prefix + key) as string;
 
-		/// <summary>"Vulkan" ou "OpenGL" (só informativo aqui: o host escolhe o driver antes do jogo iniciar).</summary>
+		/// <summary>"Vulkan" or "OpenGL" (informational here only: the host picks the driver before the game starts).</summary>
 		public static string Renderer => Raw("Renderer") ?? "Vulkan";
 
 		/// <summary>
-		/// Limite de quadros desenhados por segundo: 30 ou 60. A lógica do Celeste é fixa em 60 Hz, então valores
-		/// maiores (ou "unlimited") viram 60.
+		/// Cap on frames drawn per second: 30 or 60. Celeste's logic is fixed at 60 Hz, so higher values
+		/// larger (or "unlimited") become 60.
 		/// </summary>
 		public static int FrameCap
 		{
@@ -33,12 +33,12 @@ namespace CelesteAndroid
 			}
 		}
 
-		/// <summary>Texto atual de uma opção (AppContext) ou o padrão do catálogo.</summary>
+		/// <summary>Current text of an option (AppContext) or the catalog default.</summary>
 		public static string Get(PortSetting setting) => setting.Values[setting.IndexOf(Raw(setting.Key))];
 
 		/// <summary>
-		/// Muda uma opção em tempo de execução (menu PORT do jogo): atualiza o AppContext (valendo já no próximo quadro)
-		/// e grava o arquivo compartilhado com o launcher e com o host desktop.
+		/// Changes an option at run time (the game's PORT menu): updates AppContext (effective from the next frame)
+		/// and writes the file shared with the launcher and the desktop host.
 		/// </summary>
 		public static void Set(PortSetting setting, string value)
 		{
@@ -87,7 +87,7 @@ namespace CelesteAndroid
 		private static T ParseEnum<T>(string? v, T fallback) where T : struct =>
 			v != null && Enum.TryParse(v.Replace("-", "").Replace("_", ""), ignoreCase: true, out T r) ? r : fallback;
 
-		/// <summary>Registra cada opção aplicada ("[CelesteAndroid] setting nome=valor"), uma por linha.</summary>
+		/// <summary>Logs each applied option ("[CelesteAndroid] setting name=value"), one per line.</summary>
 		public static void LogApplied(int backBufferWidth, int backBufferHeight)
 		{
 			Log("renderer", Renderer);

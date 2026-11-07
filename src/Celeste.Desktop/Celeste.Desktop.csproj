@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<!-- Host de desenvolvimento (M1): roda o Celeste patcheado no Linux, com o mesmo fluxo do app Android. -->
+	<!-- Development host (M1): runs the patched Celeste on Linux, with the same flow as the Android app. -->
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net10.0</TargetFramework>
@@ -10,7 +10,7 @@
 		<AssemblyName>CelesteDesktop</AssemblyName>
 	</PropertyGroup>
 	<ItemGroup>
-		<!-- Definição das opções do port e leitor/gravador do JSON (compartilhado com os patches e o app Android). -->
+		<!-- Port option definitions and the JSON reader/writer (shared with the patches and the Android app). -->
 		<Compile Include="..\Celeste.Android.Patches\PortSettingsCatalog.cs" Link="PortSettingsCatalog.cs" />
 	</ItemGroup>
 	<ItemGroup>
@@ -23,10 +23,10 @@
 	<ItemGroup>
 		<!-- fnalibs linux-x64 (SDL3, FNA3D, FAudio; scripts/fetch-fnalibs.sh) -->
 		<None Include="$(RepoRoot)natives\linux-x64\*.so*" CopyToOutputDirectory="PreserveNewest" Visible="false" />
-		<!-- FMOD 1.10 do jogo (Celeste/lib64, versionado .so.10): o P/Invoke procura libfmod.so / libfmodstudio.so. -->
+		<!-- The game's FMOD 1.10 (Celeste/lib64, versioned .so.10): P/Invoke looks for libfmod.so / libfmodstudio.so. -->
 		<None Include="$(CelesteGameDir)lib64\libfmod.so.10" Link="libfmod.so" CopyToOutputDirectory="PreserveNewest" Visible="false" />
 		<None Include="$(CelesteGameDir)lib64\libfmodstudio.so.10" Link="libfmodstudio.so" CopyToOutputDirectory="PreserveNewest" Visible="false" />
-		<!-- libfmodstudio.so depende de libfmod.so.10 (soname): também vai com o nome versionado. -->
+		<!-- libfmodstudio.so depends on libfmod.so.10 (soname): it also ships under the versioned name. -->
 		<None Include="$(CelesteGameDir)lib64\libfmod.so.10" CopyToOutputDirectory="PreserveNewest" Visible="false" />
 	</ItemGroup>
 </Project>

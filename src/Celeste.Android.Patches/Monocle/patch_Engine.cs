@@ -8,8 +8,8 @@ using MonoMod;
 namespace Monocle
 {
 	/// <summary>
-	/// Patches do port em Monocle.Engine. Regra: só ganchos/wrappers aditivos (orig_* + lógica extra), nunca
-	/// [MonoModReplace] de um método inteiro, para coexistir com o Everest (ver docs/EVEREST.md).
+	/// The port's patches in Monocle.Engine. Rule: only additive hooks/wrappers (orig_* + extra logic), never
+	/// [MonoModReplace] of a whole method, to coexist with Everest (see docs/EVEREST.md).
 	/// </summary>
 	[MonoModPatch("Monocle.Engine")]
 	public class patch_Engine : Engine
@@ -34,8 +34,8 @@ namespace Monocle
 		protected override void Update(GameTime gameTime)
 		{
 			orig_Update(gameTime);
-			// A lógica do Celeste roda a 60 Hz fixos (a física depende disso), então o limite é 30 ou 60:
-			// 30 = um quadro a cada dois updates; 60 = todo update.
+			// Celeste's logic runs at a fixed 60 Hz (the physics depends on it), so the cap is 30 or 60:
+			// 30 = one frame every two updates; 60 = every update.
 			if (PortConfig.FrameCap < 60 && (updateCount++ % (60 / PortConfig.FrameCap)) != 0)
 			{
 				SuppressDraw();
@@ -44,7 +44,7 @@ namespace Monocle
 
 		public static extern void orig_SetWindowed(int width, int height);
 
-		/// <summary>Sempre tela cheia no Android: o modo janela renderiza 320x180×escala e o sistema estica a imagem.</summary>
+		/// <summary>Always fullscreen on Android: windowed mode renders 320x180×scale and the system stretches the image.</summary>
 		public static new void SetWindowed(int width, int height)
 		{
 			if (HostConfig.IsAndroid)
@@ -57,7 +57,7 @@ namespace Monocle
 
 		public static extern void orig_SetFullscreen();
 
-		/// <summary>Depois da tela cheia nativa do original, aplica "Resolution scale" (o FNA3D amplia o backbuffer menor ao apresentar).</summary>
+		/// <summary>After the original's native fullscreen, applies "Resolution scale" (FNA3D upscales the smaller backbuffer when presenting).</summary>
 		public static new void SetFullscreen()
 		{
 			orig_SetFullscreen();
@@ -77,7 +77,7 @@ namespace Monocle
 
 		private extern void orig_UpdateView();
 
-		/// <summary>O cálculo original encaixa 16:9; aqui entram "Stretch" e "Integer scaling".</summary>
+		/// <summary>The original calculation fits 16:9; "Stretch" and "Integer scaling" come in here.</summary>
 		private void UpdateView()
 		{
 			orig_UpdateView();
@@ -88,8 +88,8 @@ namespace Monocle
 		protected extern void orig_RenderCore();
 
 		/// <summary>
-		/// Renderização original (limpa a tela com ClearColor e desenha a cena) e, por cima, as faixas fora da área do
-		/// jogo ("Screen fit": arte ou preto) e o overlay de desempenho.
+		/// The original rendering (clears the screen with ClearColor and draws the scene) and, on top, the bars outside the
+		/// game area ("Screen fit": art or black) and the performance overlay.
 		/// </summary>
 		protected override void RenderCore()
 		{
@@ -101,8 +101,8 @@ namespace Monocle
 		private static readonly RasterizerState ScissorState = new() { CullMode = CullMode.None, ScissorTestEnable = true };
 
 		/// <summary>
-		/// Pinta só o que fica fora do viewport do jogo: a arte (side art) ou preto. Roda depois da cena porque algumas
-		/// cenas (ex.: Level) limpam a tela inteira de preto ao renderizar.
+		/// Paints only what lies outside the game viewport: the art (side art) or black. Runs after the scene because some
+		/// scenes (e.g. Level) clear the whole screen to black when rendering.
 		/// </summary>
 		private void DrawBars()
 		{
@@ -150,7 +150,7 @@ namespace Monocle
 			GraphicsDevice.Viewport = view;
 		}
 
-		/// <summary>"Cover": preenche a tela inteira mantendo a proporção da imagem (dentro de um Begin/End).</summary>
+		/// <summary>"Cover": fills the whole screen keeping the image aspect ratio (inside a Begin/End).</summary>
 		private static void DrawArt(PresentationParameters pp)
 		{
 			float scale = Math.Max(

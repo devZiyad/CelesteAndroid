@@ -6,7 +6,7 @@ using Monocle;
 
 namespace CelesteAndroid
 {
-	/// <summary>"Screen fit": modos de encaixe da imagem (16:9 com arte/preto ou esticado) e escala inteira.</summary>
+	/// <summary>"Screen fit": image fit modes (16:9 with art/black, or stretched) and integer scaling.</summary>
 	public static class PortView
 	{
 		private static readonly BindingFlags Static = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
@@ -14,7 +14,7 @@ namespace CelesteAndroid
 		private static void Set(string property, object value) =>
 			typeof(Engine).GetProperty(property, Static)!.GetSetMethod(true)!.Invoke(null, new[] { value });
 
-		/// <summary>Chamado depois do UpdateView original (que já encaixou 16:9 e aplicou o ViewPadding).</summary>
+		/// <summary>Called after the original UpdateView (which already fitted 16:9 and applied ViewPadding).</summary>
 		public static void Adjust(int backWidth, int backHeight, int width, int height, int padding)
 		{
 			ScreenFitMode fit = PortConfig.ScreenFit;
@@ -24,7 +24,7 @@ namespace CelesteAndroid
 				return;
 			}
 
-			// A grade de pixels do jogo é 320x180; escala inteira = múltiplo disso.
+			// The game's pixel grid is 320x180; integer scale = a multiple of that.
 			int viewW, viewH;
 			if (fit == ScreenFitMode.Stretch)
 			{

@@ -45,7 +45,7 @@ namespace CelesteAndroid.Steam.Tests
 			foreach (ManifestFile f in m.Files.Where(f => !f.IsDirectory))
 			{
 				long offset = 0;
-				// A Steam não garante a ordem dos chunks na lista: o que importa é cobrirem o arquivo sem buracos nem sobreposição.
+				// Steam does not guarantee the order of the chunks in the list: what matters is that they cover the file with no gaps or overlaps.
 				foreach (ManifestChunk c in f.Chunks.OrderBy(c => c.Offset))
 				{
 					Assert.Equal(offset, c.Offset);

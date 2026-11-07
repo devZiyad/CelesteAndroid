@@ -5,9 +5,9 @@ using System.IO;
 namespace CelesteAndroid.Desktop
 {
 	/// <summary>
-	/// Opções do port no host desktop, as mesmas da tela "Port settings" do launcher e do menu PORT do jogo.
-	/// Fontes (a última vence): <c>port-settings.json</c> ao lado do host (ou <c>--settings arquivo</c>) e flags.
-	/// O menu PORT do jogo grava de volta nesse mesmo arquivo.
+	/// The port's options on the desktop host, the same as the launcher's "Port settings" screen and the game's PORT menu.
+	/// Sources (the last one wins): <c>port-settings.json</c> next to the host (or <c>--settings file</c>) and flags.
+	/// The game's PORT menu writes back to that same file.
 	/// Chaves do JSON: Renderer, FrameCap, VSync, ResolutionScale, Overlay, OverlayCorner, ScreenFit, IntegerScaling.
 	/// Flags: --renderer vulkan|opengl, --frame-cap 30|60 (maiores viram 60), --vsync on|off, --res-scale 0.5..1,
 	/// --overlay off|fps|graph, --corner topleft|topright|bottomleft|bottomright, --screen-fit sideart|blackbars|stretch,
@@ -21,7 +21,7 @@ namespace CelesteAndroid.Desktop
 			["--overlay"] = "Overlay", ["--corner"] = "OverlayCorner", ["--screen-fit"] = "ScreenFit", ["--integer-scaling"] = "IntegerScaling",
 		};
 
-		/// <summary>Publica as opções no AppContext e devolve os argumentos que sobraram (para o Main do Celeste).</summary>
+		/// <summary>Publishes the options in AppContext and returns the leftover arguments (for Celeste's Main).</summary>
 		public static string[] Apply(string[] args, string hostDir)
 		{
 			string file = Path.Combine(hostDir, PortSettingsCatalog.FileName);
@@ -43,7 +43,7 @@ namespace CelesteAndroid.Desktop
 
 			foreach ((string key, string value) in values)
 				AppContext.SetData(PortSettingsCatalog.ContextPrefix + key, value);
-			// O menu PORT do jogo grava aqui (o arquivo é criado na primeira mudança).
+			// The game's PORT menu writes here (the file is created on the first change).
 			AppContext.SetData(PortSettingsCatalog.FileKey, file);
 			return rest.ToArray();
 		}

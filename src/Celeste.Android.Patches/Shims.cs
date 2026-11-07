@@ -5,8 +5,8 @@ using MonoMod;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Configuração passada pelo host (desktop ou Activity Android) antes do jogo iniciar.
-	/// Usa AppContext para não exigir referência ao Celeste.dll patcheado.
+	/// Configuration passed by the host (desktop or the Android Activity) before the game starts.
+	/// Uses AppContext so it does not need a reference to the patched Celeste.dll.
 	/// </summary>
 	public static class HostConfig
 	{
@@ -15,24 +15,24 @@ namespace CelesteAndroid
 		public const string BackgroundPathKey = "CelesteAndroid.BackgroundPath";
 		public const string HostKey = "CelesteAndroid.Host";
 
-		/// <summary>"android" (app) ou "desktop" (host Linux de testes); o padrão é Android.</summary>
+		/// <summary>"android" (the app) or "desktop" (the Linux test host); the default is Android.</summary>
 		public static string Host => AppContext.GetData(HostKey) as string ?? "android";
 
-		/// <summary>No desktop o menu de vídeo do Celeste (Fullscreen/Window Scale) continua como no original.</summary>
+		/// <summary>On desktop, Celeste's video menu (Fullscreen/Window Scale) stays as in the original.</summary>
 		public static bool IsAndroid => !string.Equals(Host, "desktop", StringComparison.OrdinalIgnoreCase);
 
 		public static string Platform => AppContext.GetData(PlatformKey) as string ?? "Android";
 
-		/// <summary>Imagem para as faixas laterais em telas mais largas que 16:9 (opcional).</summary>
+		/// <summary>Image for the side bars on screens wider than 16:9 (optional).</summary>
 		public static string? BackgroundPath => AppContext.GetData(BackgroundPathKey) as string;
 
 		public static string PrefPath => AppContext.GetData(PrefPathKey) as string
-			?? throw new InvalidOperationException($"{PrefPathKey} não foi definido pelo host.");
+			?? throw new InvalidOperationException($"{PrefPathKey} was not set by the host.");
 	}
 
 	/// <summary>
-	/// O Celeste chama SDL2 diretamente, mas o FNA atual roda sobre SDL3.
-	/// As chamadas são religadas para cá durante o patch.
+	/// Celeste calls SDL2 directly, but the current FNA runs on SDL3.
+	/// The calls are relinked to here during patching.
 	/// </summary>
 	public static class SDLShim
 	{
@@ -50,11 +50,11 @@ namespace CelesteAndroid
 
 	public static class GCShim
 	{
-		/// <summary>O runtime Mono do Android lança PlatformNotSupportedException ao mudar a latência do GC.</summary>
+		/// <summary>Android's Mono runtime throws PlatformNotSupportedException when changing the GC latency mode.</summary>
 		[MonoModLinkFrom("System.Void System.Runtime.GCSettings::set_LatencyMode(System.Runtime.GCLatencyMode)")]
 		public static void SetLatencyMode(System.Runtime.GCLatencyMode mode)
 		{
-			// Por reflexão: uma chamada direta também seria religada para cá (recursão infinita).
+			// Through reflection: a direct call would be relinked to here too (infinite recursion).
 			try
 			{
 				typeof(System.Runtime.GCSettings).GetProperty(nameof(System.Runtime.GCSettings.LatencyMode))!.SetValue(null, mode);
@@ -66,7 +66,7 @@ namespace CelesteAndroid
 	}
 
 	/// <summary>
-	/// O Celeste usa GetEntryAssembly() para achar os próprios tipos; com um loader, o "entry" não é ele.
+	/// Celeste uses GetEntryAssembly() to find its own types; with a loader, the "entry" assembly is not Celeste.
 	/// </summary>
 	public static class ReflectionShim
 	{

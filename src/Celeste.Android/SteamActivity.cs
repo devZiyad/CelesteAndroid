@@ -25,10 +25,10 @@ using Uri = Android.Net.Uri;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Instala o jogo pela Steam: login no próprio aparelho (QR aprovado no app da Steam do mesmo celular, ou usuário/senha com
-	/// aprovação por push e código do Steam Guard como último recurso), confere a posse do Celeste e baixa o depot Linux 504233
-	/// (ramo público) direto para a pasta final, com progresso navegável por controle. Depois entrega Celeste.exe e Content/ ao
-	/// passo de patch do GameInstaller. Nunca registra nem guarda a senha; só o refresh token, criptografado no Keystore.
+	/// Installs the game from Steam: sign-in on the device itself (QR approved in the Steam app on the same phone, or username/password with
+	/// push approval and a Steam Guard code as the last resort), checks ownership of Celeste and downloads Linux depot 504233
+	/// (public branch) straight into the final folder, with controller-navigable progress. Then hands Celeste.exe and Content/ to
+	/// GameInstaller's patch step. Never logs or stores the password; only the refresh token, encrypted in the Keystore.
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.SteamActivity",
@@ -43,9 +43,9 @@ namespace CelesteAndroid
 		private const string LogTag = "CelesteSteam";
 		private const string SteamPackage = "com.valvesoftware.android.steam.community";
 		public const string ExtraRecordManifest = "recordManifest";
-		/// <summary>Depuração (adb): ignora a sessão guardada (sem apagá-la) para mostrar as telas de login.</summary>
+		/// <summary>Debug (adb): ignores the stored session (without deleting it) to show the login screens.</summary>
 		public const string ExtraForceLogin = "forceLogin";
-		/// <summary>Depuração (adb): mostra a tela de erro para conferir o layout.</summary>
+		/// <summary>Debug (adb): shows the error screen to check the layout.</summary>
 		public const string ExtraShowError = "showError";
 
 		private static readonly Color Night = Color.ParseColor("#120C22");
@@ -79,7 +79,7 @@ namespace CelesteAndroid
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
-			Window!.AddFlags(WindowManagerFlags.KeepScreenOn); // o download não pode parar com a tela apagando
+			Window!.AddFlags(WindowManagerFlags.KeepScreenOn); // the download must not stop when the screen turns off
 			View root = BuildLayout();
 			SetContentView(root);
 			WatchFocus(root);
@@ -94,7 +94,7 @@ namespace CelesteAndroid
 			base.OnDestroy();
 		}
 
-		#region Fluxo
+		#region Flow
 
 		private async Task PipelineAsync(CancellationToken ct)
 		{
@@ -201,7 +201,7 @@ namespace CelesteAndroid
 			}
 		}
 
-		/// <summary>Nunca inclui detalhes que possam ter segredos: só o tipo e a mensagem da exceção.</summary>
+		/// <summary>Never includes details that could hold secrets: only the exception's type and message.</summary>
 		private static string Describe(Exception e) => e switch
 		{
 			SteamKit2.Authentication.AuthenticationException a => $"Sign-in failed: {a.Result}",
@@ -216,7 +216,7 @@ namespace CelesteAndroid
 			while (true)
 			{
 				ct.ThrowIfCancellationRequested();
-				// 1) QR (padrão): "Abrir no app da Steam" no mesmo celular, ou ler o QR de outro aparelho.
+				// 1) QR (default): "Open in Steam app" on the same phone, or scan the QR from another device.
 				switchToCredentials = new(TaskCreationOptions.RunContinuationsAsynchronously);
 				SetScreen(Screen.Qr, "Sign in to Steam", "Approve the sign-in in the Steam app on this phone.");
 				using (var qrCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
@@ -231,7 +231,7 @@ namespace CelesteAndroid
 						}
 						catch (Exception e) when (e is SteamKit2.AsyncJobFailedException or SteamException or SteamKit2.Authentication.AuthenticationException && !ct.IsCancellationRequested)
 						{
-							// A conexão caiu (ou o desafio expirou) enquanto esperava a aprovação: reconecta e gera um QR novo.
+							// The connection dropped (or the challenge expired) while waiting for approval: reconnect and issue a new QR.
 							LogLine("steam: connection lost while waiting for approval, reconnecting with a new QR code");
 							session.Dispose();
 							session = new SteamSession(LogLine);
@@ -243,7 +243,7 @@ namespace CelesteAndroid
 					try { await qr.ConfigureAwait(false); } catch (OperationCanceledException) { }
 				}
 
-				// 2) Usuário e senha, com aprovação por push (e código digitado como último recurso).
+				// 2) Username and password, with push approval (and a typed code as the last resort).
 				switchToQr = new(TaskCreationOptions.RunContinuationsAsynchronously);
 				credentialsSubmitted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 				SetScreen(Screen.Credentials, "Sign in with your Steam account", "Your password is only sent to Steam and is never saved.");
@@ -256,7 +256,7 @@ namespace CelesteAndroid
 				(string user, string pass) = await submitted.ConfigureAwait(false);
 				try
 				{
-					// O formulário pode ter ficado parado por minutos e a Steam fecha conexões ociosas: reconecta antes de enviar.
+					// The form may have sat idle for minutes and Steam closes idle connections: reconnect before sending.
 					if (!session!.IsConnected)
 					{
 						LogLine("steam: connection was closed while the form was open, reconnecting");
@@ -271,7 +271,7 @@ namespace CelesteAndroid
 				{
 					LogLine("steam: credentials sign-in failed: " + e.Result);
 					RunOnUiThread(() => { signInButton.Enabled = true; status.Text = "Sign-in failed (" + e.Result + "). Check your details and try again."; });
-					// volta ao formulário
+					// back to the form
 					credentialsSubmitted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 					SetScreen(Screen.Credentials, "Sign in with your Steam account", "Sign-in failed (" + e.Result + "). Check your details and try again.");
 					which = await Task.WhenAny(credentialsSubmitted.Task, switchToQr.Task).ConfigureAwait(false);
@@ -331,7 +331,7 @@ namespace CelesteAndroid
 
 		#endregion
 
-		#region Telas
+		#region Screens
 
 		private View BuildLayout()
 		{
@@ -350,7 +350,7 @@ namespace CelesteAndroid
 			var column = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			column.SetGravity(GravityFlags.CenterVertical);
 			column.SetPadding(Dp(6), Dp(10), Dp(6), Dp(10));
-			// Se o conteúdo não couber (formulário + teclado, telas pequenas), rola em vez de cortar.
+			// If the content does not fit (form + keyboard, small screens), scroll instead of clipping.
 			var scroll = new ScrollView(this) { VerticalScrollBarEnabled = false, FillViewport = true };
 			scroll.SetClipChildren(false);
 			scroll.SetClipToPadding(false);
@@ -362,7 +362,7 @@ namespace CelesteAndroid
 			status = Text("", 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
 			column.AddView(status, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(6) });
 
-			// QR: botão principal + alternativa
+			// QR: main button + alternative
 			qrGroup = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			openSteamQr = Pill("Open in Steam app", filled: true);
 			openSteamQr.Click += (_, _) => { if (challengeUrl != null) OpenInSteam(challengeUrl); };
@@ -376,7 +376,7 @@ namespace CelesteAndroid
 			qrGroup.AddView(qrHint, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(6) });
 			column.AddView(qrGroup);
 
-			// Usuário/senha
+			// Username/password
 			credentialsGroup = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			userField = Field("Steam username", password: false);
 			passField = Field("Password", password: true);
@@ -474,7 +474,7 @@ namespace CelesteAndroid
 		{
 			string user = userField.Text ?? "", pass = passField.Text ?? "";
 			if (user.Length == 0 || pass.Length == 0) { status.Text = "Enter your username and password."; return; }
-			passField.Text = ""; // a senha não fica na tela nem no campo
+			passField.Text = ""; // the password stays neither on screen nor in the field
 			((InputMethodManager?)GetSystemService(InputMethodService))?.HideSoftInputFromWindow(passField.WindowToken, HideSoftInputFlags.None);
 			credentialsSubmitted?.TrySetResult((user, pass));
 			signInButton.Enabled = false;

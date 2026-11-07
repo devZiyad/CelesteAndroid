@@ -6,9 +6,9 @@ using System.Text;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Uma opção do port: rótulos para o usuário e os valores (texto) que o jogo recebe pelo AppContext.
-	/// Este arquivo é compilado nos patches (vai para o Celeste.dll), no app Android e no host desktop: o menu
-	/// PORT do jogo, a tela "Port settings" do launcher e o host usam a mesma definição.
+	/// A port option: labels for the user and the values (text) the game receives through AppContext.
+	/// This file is compiled into the patches (it goes into Celeste.dll), the Android app and the desktop host: the game's
+	/// PORT menu, the launcher's "Port settings" screen and the host all use the same definition.
 	/// </summary>
 	public sealed class PortSetting
 	{
@@ -17,7 +17,7 @@ namespace CelesteAndroid
 		public readonly string[] Labels;
 		public readonly string[] Values;
 		public readonly int Default;
-		/// <summary>Só vale na próxima inicialização (o menu do jogo avisa).</summary>
+		/// <summary>Only takes effect on the next launch (the game menu says so).</summary>
 		public readonly bool NextLaunch;
 
 		public PortSetting(string key, string label, string[] labels, string[] values, int defaultIndex, bool nextLaunch = false)
@@ -35,13 +35,13 @@ namespace CelesteAndroid
 	public static class PortSettingsCatalog
 	{
 		public const string ContextPrefix = "CelesteAndroid.";
-		/// <summary>Chave do AppContext com o caminho do arquivo de opções compartilhado (launcher, jogo e host).</summary>
+		/// <summary>AppContext key holding the path of the shared options file (launcher, game and host).</summary>
 		public const string FileKey = ContextPrefix + "SettingsFile";
 		public const string FileName = "port-settings.json";
 
 		public static readonly PortSetting Renderer = new("Renderer", "Renderer",
 			new[] { "Vulkan", "OpenGL ES" }, new[] { "Vulkan", "OpenGL" }, 0, nextLaunch: true);
-		// Só 30 e 60: a lógica do Celeste é fixa em 60 Hz, então um limite maior nunca produziria mais quadros.
+		// Only 30 and 60: Celeste's logic is fixed at 60 Hz, so a higher cap would never produce more frames.
 		public static readonly PortSetting FrameCap = new("FrameCap", "Frame cap",
 			new[] { "30", "60" }, new[] { "30", "60" }, 1);
 		public static readonly PortSetting VSync = new("VSync", "VSync",
@@ -69,13 +69,13 @@ namespace CelesteAndroid
 	}
 
 	/// <summary>
-	/// Arquivo JSON plano ({"Chave": "valor", ...}) compartilhado pelo launcher, pelo menu PORT do jogo e pelo
-	/// host desktop. Leitor tolerante (aceita true/false/números sem aspas e chaves em camelCase) e escritor simples,
-	/// sem depender de System.Text.Json (o código também roda dentro do Celeste.dll patcheado).
+	/// Flat JSON file ({"Key": "value", ...}) shared by the launcher, the game's PORT menu and the
+	/// desktop host. Tolerant reader (accepts unquoted true/false/numbers and camelCase keys) and a simple writer,
+	/// without depending on System.Text.Json (the code also runs inside the patched Celeste.dll).
 	/// </summary>
 	public static class PortSettingsFile
 	{
-		/// <summary>Lê o arquivo; chaves desconhecidas são ignoradas, as conhecidas voltam com o nome canônico.</summary>
+		/// <summary>Reads the file; unknown keys are ignored, known ones come back under their canonical name.</summary>
 		public static Dictionary<string, string> Read(string? path)
 		{
 			var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -107,7 +107,7 @@ namespace CelesteAndroid
 			return result;
 		}
 
-		/// <summary>Grava todas as opções (valor do dicionário ou o padrão) de forma atômica.</summary>
+		/// <summary>Writes all options (the dictionary value or the default) atomically.</summary>
 		public static void Write(string path, IDictionary<string, string> values)
 		{
 			var sb = new StringBuilder("{\n");

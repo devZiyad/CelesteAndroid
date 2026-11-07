@@ -8,10 +8,10 @@ using System.Threading.Tasks;
 
 namespace CelesteAndroid.Steam
 {
-	/// <summary>De onde vêm os bytes de um chunk (a Steam em produção, um gerador falso nos testes).</summary>
+	/// <summary>Where a chunk's bytes come from (Steam in production, a fake generator in tests).</summary>
 	public interface IChunkSource
 	{
-		/// <summary>Baixa, descriptografa e descomprime o chunk em <paramref name="buffer"/>; devolve quantos bytes escreveu.</summary>
+		/// <summary>Downloads, decrypts and decompresses the chunk into <paramref name="buffer"/>; returns how many bytes it wrote.</summary>
 		Task<int> DownloadChunkAsync(ManifestChunk chunk, byte[] buffer, CancellationToken cancellationToken);
 	}
 
@@ -25,9 +25,9 @@ namespace CelesteAndroid.Steam
 	}
 
 	/// <summary>
-	/// Baixa o conjunto necessário do manifesto direto para a pasta final do jogo (sem cópia de staging, então o jogo nunca fica
-	/// guardado duas vezes), em chunks, com retomada: o progresso fica num arquivo de estado fora da pasta do jogo, que é
-	/// apagado quando tudo foi verificado (SHA-1 de cada arquivo). Sobras fora do conjunto necessário são removidas.
+	/// Downloads the manifest's needed set straight into the game's final folder (no staging copy, so the game is never
+	/// stored twice), in chunks, with resume: progress is kept in a state file outside the game folder, which is
+	/// deleted once everything is verified (SHA-1 of every file). Leftovers outside the needed set are removed.
 	/// </summary>
 	public sealed class DepotInstaller
 	{
@@ -54,7 +54,7 @@ namespace CelesteAndroid.Steam
 			SelectionResult selection = FileSelection.Select(manifest);
 			Directory.CreateDirectory(root);
 
-			// Antes de gastar espaço: tira o que não faz parte do conjunto necessário (versões antigas, arquivos pulados).
+			// Before spending space: remove what is not part of the needed set (old versions, skipped files).
 			RemovalReport removed = StaleFileRemover.Remove(root, selection.NeededPaths);
 
 			ResumeState state = ResumeState.Load(stateFile, manifest.ManifestId);
@@ -77,7 +77,7 @@ namespace CelesteAndroid.Steam
 			}
 			finally
 			{
-				state.Save(stateFile); // retomável mesmo se cancelado/falhou
+				state.Save(stateFile); // resumable even if cancelled/failed
 			}
 
 			removed = Merge(removed, StaleFileRemover.Remove(root, selection.NeededPaths));
@@ -85,14 +85,14 @@ namespace CelesteAndroid.Steam
 			if (files != selection.Needed.Count || bytes != selection.NeededBytes)
 				throw new DepotInstallException($"Installed {files} files / {bytes} bytes, expected {selection.Needed.Count} / {selection.NeededBytes}.");
 
-			ResumeState.Delete(stateFile); // verificado: nada de estado de retomada, cache ou temporário sobra
+			ResumeState.Delete(stateFile); // verified: no resume state, cache or temp files are left
 			progress.Phase("Done");
 			return new InstallResult(files, bytes, selection.Skipped.Count, selection.SkippedBytes, removed);
 		}
 
 		private string PathOf(ManifestFile file) => System.IO.Path.Combine(root, file.Path.Replace('/', System.IO.Path.DirectorySeparatorChar));
 
-		/// <summary>Cria/ajusta os arquivos e devolve os chunks que ainda faltam.</summary>
+		/// <summary>Creates/adjusts the files and returns the chunks still missing.</summary>
 		private List<(ManifestFile, int)> PrepareFiles(IReadOnlyList<ManifestFile> needed, ResumeState state, ProgressTracker progress)
 		{
 			var work = new List<(ManifestFile, int)>();
@@ -110,14 +110,14 @@ namespace CelesteAndroid.Steam
 				Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
 				if (!info.Exists || info.Length != file.Size)
 				{
-					// Arquivo novo (ou de tamanho errado): recomeça este arquivo.
+					// New file (or the wrong size): start this file over.
 					state.Chunks.Remove(file.Path);
 					using FileStream fs = new(path, FileMode.Create, FileAccess.Write, FileShare.None);
 					fs.SetLength(file.Size);
 				}
 				else if (!state.Chunks.ContainsKey(file.Path) && HashMatches(path, file))
 				{
-					// Já existe completo (instalação anterior): conta como verificado sem baixar.
+					// Already complete (earlier install): counts as verified without downloading.
 					state.VerifiedFiles.Add(file.Path);
 					progress.AddDone(file.Size, fileDone: true);
 					continue;
@@ -185,7 +185,7 @@ namespace CelesteAndroid.Steam
 			}
 		}
 
-		/// <summary>Confere o SHA-1 de cada arquivo; os que falham são apagados (e seus chunks esquecidos) para baixar de novo.</summary>
+		/// <summary>Checks each file's SHA-1; the ones that fail are deleted (and their chunks forgotten) to download again.</summary>
 		private async Task<List<ManifestFile>> VerifyAsync(IReadOnlyList<ManifestFile> needed, ResumeState state, ProgressTracker progress, CancellationToken ct)
 		{
 			var bad = new List<ManifestFile>();
@@ -217,7 +217,7 @@ namespace CelesteAndroid.Steam
 		private static bool HashMatches(string path, ManifestFile file)
 		{
 			if (string.IsNullOrEmpty(file.Sha1) || file.Sha1.All(c => c == '0'))
-				return new FileInfo(path).Length == file.Size; // sem hash no manifesto: só o tamanho
+				return new FileInfo(path).Length == file.Size; // no hash in the manifest: size only
 			using FileStream fs = File.OpenRead(path);
 			return string.Equals(Convert.ToHexString(SHA1.HashData(fs)), file.Sha1, StringComparison.OrdinalIgnoreCase);
 		}

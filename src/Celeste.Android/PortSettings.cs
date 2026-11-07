@@ -7,9 +7,9 @@ using Android.Util;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Configurações do port no lado do app. Ficam em <c>files/userdata/port-settings.json</c>, o MESMO arquivo que o
-	/// menu PORT do jogo lê e grava (ver <see cref="PortSettingsFile"/>), então o que muda em um aparece no outro.
-	/// Chegam ao jogo pelo AppContext ("CelesteAndroid.&lt;Key&gt;" = texto; ver CelesteAndroid.PortConfig nos patches).
+	/// The port's settings on the app side. They live in <c>files/userdata/port-settings.json</c>, the SAME file that the
+	/// game's PORT menu reads and writes (see <see cref="PortSettingsFile"/>), so what changes in one shows up in the other.
+	/// They reach the game through AppContext ("CelesteAndroid.&lt;Key&gt;" = text; see CelesteAndroid.PortConfig in the patches).
 	/// </summary>
 	public static class PortSettings
 	{
@@ -19,7 +19,7 @@ namespace CelesteAndroid
 		public static readonly PortSetting FrameCap = PortSettingsCatalog.FrameCap;
 		public static readonly PortSetting[] All = PortSettingsCatalog.All;
 
-		// Índices gravados em SharedPreferences ("port") por versões anteriores (importados uma vez para o JSON).
+		// Indices saved in SharedPreferences ("port") by earlier versions (imported once into the JSON).
 		private static readonly string[] LegacyFrameCap = { "30", "60", "90", "120", "unlimited" };
 
 		public static string FilePath(Context context) => Path.Combine(GameInstaller.UserDir(context), PortSettingsCatalog.FileName);
@@ -70,8 +70,8 @@ namespace CelesteAndroid
 		}
 
 		/// <summary>
-		/// Publica todas as opções no AppContext para o Celeste.dll patcheado ler, junto com o caminho do arquivo
-		/// (o menu do jogo grava nele). Valores que não existem mais (ex.: limite de quadros &gt; 60) viram o padrão.
+		/// Publishes all options in AppContext for the patched Celeste.dll to read, along with the file path
+		/// (the game menu writes to it). Values that no longer exist (e.g. a frame cap &gt; 60) become the default.
 		/// </summary>
 		public static void ApplyToAppContext(Context context)
 		{

@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<!-- Módulo MonoMod: tipos/patches daqui são mesclados no Celeste.dll pelo Celeste.Patcher. -->
+	<!-- MonoMod module: types/patches from here are merged into Celeste.dll by Celeste.Patcher. -->
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
 		<AssemblyName>Celeste.Android.mm</AssemblyName>
 		<RootNamespace>CelesteAndroid</RootNamespace>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-		<!-- Padrões do MonoMod: extern orig_*, campos ignorados e null em assinaturas copiadas do jogo. -->
+		<!-- MonoMod patterns: extern orig_*, ignored fields and null in signatures copied from the game. -->
 		<NoWarn>$(NoWarn);CS0626;CS0414;CS8625</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>

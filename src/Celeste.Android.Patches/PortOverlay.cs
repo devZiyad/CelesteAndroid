@@ -7,9 +7,9 @@ using Microsoft.Xna.Framework.Graphics;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Overlay de desempenho (FPS, ou FPS + gráfico de tempo de quadro), desenhado depois da cena em
-	/// Engine.RenderCore, direto no backbuffer e em resolução nativa. Usa uma fonte 3x5 própria.
-	/// Uma vez por segundo registra "[CelesteAndroid] fps N ...".
+	/// Performance overlay (FPS, or FPS + a frame-time graph), drawn after the scene in
+	/// Engine.RenderCore, straight to the backbuffer at native resolution. Uses its own 3x5 font.
+	/// Once per second it logs "[CelesteAndroid] fps N ...".
 	/// </summary>
 	public static class PortOverlay
 	{
@@ -25,7 +25,7 @@ namespace CelesteAndroid
 		private static int framesThisSecond;
 		private static float lastFps, lastAvgMs;
 
-		// Glifos 3x5, uma string de 15 chars (linha a linha, '#' = pixel aceso).
+		// 3x5 glyphs, a 15-char string each (row by row, '#' = lit pixel).
 		private static readonly string[] Glyphs = Build();
 
 		private static string[] Build()
@@ -107,7 +107,7 @@ namespace CelesteAndroid
 			int boxW = Math.Max(textW, graphW) + pad * 2;
 			int boxH = unit * 5 + pad * 2 + (graphH > 0 ? graphH + pad : 0);
 
-			// Margem generosa: cantos arredondados e o recorte da câmera do aparelho.
+			// Generous margin: rounded corners and the device's camera cutout.
 			int margin = unit * 8;
 			OverlayCorner corner = PortConfig.Corner;
 			int x = corner is OverlayCorner.TopLeft or OverlayCorner.BottomLeft ? margin : pp.BackBufferWidth - margin - boxW;

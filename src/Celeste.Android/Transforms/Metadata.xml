@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Ajustes nos bindings gerados do Java do SDL3: campos protegidos cujo tipo é uma classe
-     package-private não podem ser expostos em C#, e não precisamos deles. -->
+<!-- Tweaks to the generated bindings of SDL3's Java: protected fields whose type is a
+     package-private class cannot be exposed in C#, and we do not need them. -->
 <metadata>
 	<remove-node path="/api/package[@name='org.libsdl.app']/class[@name='SDLActivity']/field[@name='mClipboardHandler']" />
 	<remove-node path="/api/package[@name='org.libsdl.app']/class[@name='SDLActivity']/field[@name='mMotionListener']" />

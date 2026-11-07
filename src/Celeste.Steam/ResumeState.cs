@@ -6,8 +6,8 @@ using System.Text.Json;
 namespace CelesteAndroid.Steam
 {
 	/// <summary>
-	/// Estado de retomada do download: quais chunks de cada arquivo já foram gravados e quais arquivos já foram verificados.
-	/// Vale só para o manifesto indicado; é apagado quando a instalação termina verificada.
+	/// Download resume state: which chunks of each file were already written and which files were already verified.
+	/// Only valid for the given manifest; deleted once the install finishes verified.
 	/// </summary>
 	public sealed class ResumeState
 	{

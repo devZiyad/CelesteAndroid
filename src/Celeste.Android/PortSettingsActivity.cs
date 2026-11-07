@@ -12,8 +12,8 @@ using Color = Android.Graphics.Color;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// "Port settings": renderer, limite de quadros, vsync, escala de resolução, overlay e ajuste de tela.
-	/// Controle: cima/baixo escolhem a linha, esquerda/direita (ou A) trocam o valor, B volta.
+	/// "Port settings": renderer, frame cap, vsync, resolution scale, overlay and screen fit.
+	/// Controller: up/down pick the row, left/right (or A) change the value, B goes back.
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.PortSettingsActivity",
@@ -37,7 +37,7 @@ namespace CelesteAndroid
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
-			PortSettings.ApplyToAppContext(this); // também migra valores antigos já gravados
+			PortSettings.ApplyToAppContext(this); // also migrates old values that were already saved
 			View root = BuildLayout();
 			SetContentView(root);
 			WatchFocus(root);
@@ -107,7 +107,7 @@ namespace CelesteAndroid
 			return root;
 		}
 
-		/// <summary>Uma linha "Rótulo ........ ‹ valor ›"; com setting == null, o botão "Reset to defaults".</summary>
+		/// <summary>A row "Label ........ ‹ value ›"; with setting == null, the "Reset to defaults" button.</summary>
 		private View Row(PortSetting? setting)
 		{
 			var row = new LinearLayout(this) { Orientation = Orientation.Horizontal };

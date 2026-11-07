@@ -12,7 +12,7 @@
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Celeste.Steam\Celeste.Steam.csproj" />
-		<!-- Manifesto gravado do depot 504233 (nomes, tamanhos, hashes, chunks; sem chaves): nenhum teste fala com a Steam. -->
+		<!-- Recorded manifest of depot 504233 (names, sizes, hashes, chunks; no keys): no test talks to Steam. -->
 		<Content Include="fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 </Project>

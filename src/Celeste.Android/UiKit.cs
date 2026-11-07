@@ -9,8 +9,8 @@ using Color = Android.Graphics.Color;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Peças visuais compartilhadas pelas telas do app. Regras: nada de altura fixa (a altura vem do texto + padding, com um mínimo),
-	/// margem em volta de todo botão para o contorno de foco nunca ser cortado, e pais que não cortam os filhos.
+	/// Visual pieces shared by the app's screens. Rules: no fixed heights (height comes from the text + padding, with a minimum),
+	/// a margin around every button so the focus outline is never clipped, and parents that do not clip their children.
 	/// </summary>
 	public static class UiKit
 	{
@@ -20,7 +20,7 @@ namespace CelesteAndroid
 		public static int Dp(Context context, float dp) =>
 			(int)TypedValue.ApplyDimension(ComplexUnitType.Dip, dp, context.Resources!.DisplayMetrics);
 
-		/// <summary>Botão em pílula com contorno de foco visível. Altura = texto + padding (mínimo <paramref name="minHeightDp"/>).</summary>
+		/// <summary>Pill button with a visible focus outline. Height = text + padding (minimum <paramref name="minHeightDp"/>).</summary>
 		public static TextView Pill(Context context, string label, bool filled, float minHeightDp = 44)
 		{
 			var view = new TextView(context) { Text = label, Gravity = GravityFlags.Center, Clickable = true, Focusable = true, FocusableInTouchMode = true };
@@ -46,14 +46,14 @@ namespace CelesteAndroid
 		private static GradientDrawable Shape(Context context, Color fill, Color? stroke, float strokeDp)
 		{
 			var shape = new GradientDrawable();
-			shape.SetCornerRadius(Dp(context, 40)); // maior que metade da altura: vira pílula
+			shape.SetCornerRadius(Dp(context, 40)); // larger than half the height: becomes a pill
 			shape.SetColor(fill);
 			if (stroke is Color s)
 				shape.SetStroke(Dp(context, strokeDp), s);
 			return shape;
 		}
 
-		/// <summary>Layout params de um botão: altura wrap_content e margem em volta (para o contorno de foco caber).</summary>
+		/// <summary>A button's layout params: wrap_content height and a margin around it (so the focus outline fits).</summary>
 		public static LinearLayout.LayoutParams ButtonParams(Context context, int widthDp, float marginTop = 6, float marginSide = 4)
 		{
 			int side = Dp(context, marginSide);
@@ -63,7 +63,7 @@ namespace CelesteAndroid
 			};
 		}
 
-		/// <summary>Tira o corte de filhos de um contêiner (o contorno de foco e as sombras podem passar da borda).</summary>
+		/// <summary>Turns off child clipping on a container (the focus outline and shadows may extend past the edge).</summary>
 		public static T NoClip<T>(T group) where T : ViewGroup
 		{
 			group.SetClipChildren(false);

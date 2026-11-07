@@ -1,4 +1,4 @@
-#pragma warning disable CS0626 // extern sem atributo: o MonoMod troca por orig_*
+#pragma warning disable CS0626 // extern without an attribute: MonoMod swaps it for orig_*
 using System;
 using System.Collections;
 using System.Reflection;
@@ -12,9 +12,9 @@ namespace Celeste
 		public static extern TextMenu orig_Create(bool inGame = false, EventInstance snapshot = null);
 
 		/// <summary>
-		/// Gancho aditivo: o menu de opções original é montado por orig_Create (sem reescrevê-lo) e só depois
-		/// (1) esconde "Fullscreen"/"Window Scale" no Android (o jogo roda sempre em tela cheia nativa) e
-		/// (2) acrescenta a seção PORT no fim. Convive com os ganchos do Everest, que também chamam orig_Create.
+		/// Additive hook: the original options menu is built by orig_Create (without rewriting it) and only afterwards
+		/// (1) hides "Fullscreen"/"Window Scale" on Android (the game always runs native fullscreen) and
+		/// (2) appends the PORT section at the end. Coexists with Everest's hooks, which also call orig_Create.
 		/// </summary>
 		public static TextMenu Create(bool inGame = false, EventInstance snapshot = null)
 		{
@@ -48,7 +48,7 @@ namespace Celeste
 			menu.RecalculateSize();
 		}
 
-		// Ordem do menu: o que vale na hora primeiro, o que só vale na próxima inicialização por último.
+		// Menu order: what applies immediately first, what only applies on the next launch last.
 		private static readonly PortSetting[] MenuOrder =
 		{
 			PortSettingsCatalog.Overlay, PortSettingsCatalog.OverlayCorner, PortSettingsCatalog.ScreenFit,
@@ -63,7 +63,7 @@ namespace Celeste
 			{
 				menu.Add(CreateItem(setting));
 			}
-			// Igual ao fim do menu original: com mais itens que a tela, começa rolado para a seleção.
+			// Same as the end of the original menu: with more items than fit on screen, start scrolled to the selection.
 			if (menu.Height > menu.ScrollableMinSize)
 			{
 				menu.Position.Y = menu.ScrollTargetY;

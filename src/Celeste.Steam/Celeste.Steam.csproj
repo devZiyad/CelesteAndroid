@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<!-- Instalação do jogo pela Steam (SteamKit2): login, manifesto, download em chunks retomável.
-	     Sem dependência do Android: a lógica pura (seleção de arquivos, remoção de sobras, retomada) é testada com dotnet test no Linux. -->
+	<!-- Installing the game from Steam (SteamKit2): login, manifest, resumable chunked download.
+	     No Android dependency: the pure logic (file selection, leftover removal, resume) is tested with dotnet test on Linux. -->
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
 		<RootNamespace>CelesteAndroid.Steam</RootNamespace>

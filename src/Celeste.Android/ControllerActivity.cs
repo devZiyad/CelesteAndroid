@@ -8,8 +8,8 @@ using Android.Views;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Base das telas do app: tudo navegável por controle. D-pad / analógico esquerdo movem o foco,
-	/// A confirma o item focado, B volta. Eventos de foco/tecla vão para o logcat.
+	/// Base for the app's screens: everything is navigable with a controller. D-pad / left stick move focus,
+	/// A confirms the focused item, B goes back. Focus/key events go to logcat.
 	/// </summary>
 	public abstract class ControllerActivity : Activity
 	{
@@ -18,17 +18,17 @@ namespace CelesteAndroid
 
 		protected abstract string Tag { get; }
 
-		/// <summary>Primeira view a receber o foco.</summary>
+		/// <summary>The first view to receive focus.</summary>
 		protected abstract View? InitialFocus();
 
-		/// <summary>B / voltar. Padrão: fecha a tela.</summary>
+		/// <summary>B / back. Default: closes the screen.</summary>
 		protected virtual void OnBackButton()
 		{
 			Log.Info(Tag, "back: close");
 			Finish();
 		}
 
-		/// <summary>Esquerda/direita antes de virar movimento de foco; devolva true para consumir (ex.: trocar um valor).</summary>
+		/// <summary>Left/right before it becomes focus movement; return true to consume it (e.g. to change a value).</summary>
 		protected virtual bool OnHorizontal(int direction) => false;
 
 		protected virtual bool InputBlocked => false;
@@ -39,7 +39,7 @@ namespace CelesteAndroid
 			root.ViewTreeObserver!.GlobalFocusChange += (_, e) =>
 				Log.Info(Tag, $"focus: {Describe(e.OldFocus)} -> {Describe(e.NewFocus)}");
 
-		/// <summary>Torna a view alcançável por D-pad/analógico; o destaque do foco vem do fundo (state_focused).</summary>
+		/// <summary>Makes the view reachable by D-pad/stick; the focus highlight comes from the background (state_focused).</summary>
 		protected static void MakeFocusable(View view, string name)
 		{
 			view.ContentDescription = name;
@@ -51,7 +51,7 @@ namespace CelesteAndroid
 		{
 			if (!OperatingSystem.IsAndroidVersionAtLeast(30))
 				return;
-			// A partir do Android 15 o app já é edge-to-edge por padrão.
+			// From Android 15 on the app is edge-to-edge by default.
 			if (!OperatingSystem.IsAndroidVersionAtLeast(35))
 				Window!.SetDecorFitsSystemWindows(false);
 			IWindowInsetsController? insets = Window!.InsetsController;
@@ -103,7 +103,7 @@ namespace CelesteAndroid
 						return true;
 					break;
 				case Keycode.ButtonA:
-					// A = confirmar (o Android só mapeia ENTER/DPAD_CENTER por padrão).
+					// A = confirm (Android only maps ENTER/DPAD_CENTER by default).
 					if (e.Action == KeyEventActions.Up && !InputBlocked)
 					{
 						View? target = CurrentFocus;
@@ -119,7 +119,7 @@ namespace CelesteAndroid
 			return base.DispatchKeyEvent(e);
 		}
 
-		/// <summary>Analógico esquerdo e D-pad "hat" (muitos controles o reportam como eixo) movem o foco, com repetição.</summary>
+		/// <summary>The left stick and the D-pad "hat" (many controllers report it as an axis) move focus, with repeat.</summary>
 		public override bool OnGenericMotionEvent(MotionEvent? e)
 		{
 			if (e != null && e.Action == MotionEventActions.Move

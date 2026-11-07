@@ -14,25 +14,25 @@ namespace CelesteAndroid.Steam.Tests
 		[InlineData("Celeste.exe", SelectionKind.Needed)]
 		[InlineData("Content/Graphics/Atlases/Gameplay.data", SelectionKind.Needed)]
 		[InlineData("Content/Dialog/english.txt", SelectionKind.Needed)]
-		// Launchers do Linux
+		// Linux launchers
 		[InlineData("Celeste", SelectionKind.SkippedLauncher)]
 		[InlineData("Celeste.bin.x86", SelectionKind.SkippedLauncher)]
 		[InlineData("Celeste.bin.x86_64", SelectionKind.SkippedLauncher)]
-		// Nativos x86 / x86_64
+		// x86 / x86_64 natives
 		[InlineData("lib/libSDL2-2.0.so.0", SelectionKind.SkippedNative)]
 		[InlineData("lib64/libfmod.so.10", SelectionKind.SkippedNative)]
 		[InlineData("lib64/libFNA3D.so.0", SelectionKind.SkippedNative)]
-		// Steamworks e libs da Steam
+		// Steamworks and Steam libs
 		[InlineData("Steamworks.NET.dll", SelectionKind.SkippedSteamworks)]
 		[InlineData("lib64/libsteam_api.so", SelectionKind.SkippedSteamworks)]
 		[InlineData("lib/libCSteamworks.so", SelectionKind.SkippedSteamworks)]
-		// Runtime Mono e configs
+		// Mono runtime and configs
 		[InlineData("mscorlib.dll", SelectionKind.SkippedRuntime)]
 		[InlineData("System.Core.dll", SelectionKind.SkippedRuntime)]
 		[InlineData("Mono.Posix.dll", SelectionKind.SkippedRuntime)]
 		[InlineData("monoconfig", SelectionKind.SkippedRuntime)]
 		[InlineData("Celeste.exe.config", SelectionKind.SkippedRuntime)]
-		// O resto que o port não usa
+		// The rest, which the port does not use
 		[InlineData("FNA.dll", SelectionKind.SkippedOther)]
 		[InlineData("Celeste.png", SelectionKind.SkippedOther)]
 		[InlineData("gamecontrollerdb.txt", SelectionKind.SkippedOther)]
@@ -62,7 +62,7 @@ namespace CelesteAndroid.Steam.Tests
 
 			Assert.All(r.Needed, f => Assert.True(f.Path == "Celeste.exe" || f.Path.StartsWith("Content/", StringComparison.Ordinal)));
 			Assert.Contains(r.Needed, f => f.Path == "Celeste.exe");
-			// Tudo o que não é necessário está listado como pulado, com um motivo.
+			// Everything that is not needed is listed as skipped, with a reason.
 			int fileCount = m.Files.Count(f => !f.IsDirectory);
 			Assert.Equal(fileCount, r.Needed.Count + r.Skipped.Count);
 			Assert.All(r.Skipped, s => Assert.NotEqual(SelectionKind.Needed, s.Kind));
@@ -97,7 +97,7 @@ namespace CelesteAndroid.Steam.Tests
 		[Fact]
 		public void Real_manifest_matches_what_the_phone_reported()
 		{
-			// Manifesto real do depot 504233 (ramo público, gravado no aparelho): mesmos números do logcat da instalação.
+			// Real manifest of depot 504233 (public branch, recorded on the device): the same numbers as the install's logcat.
 			ManifestSnapshot m = Fixture.Load();
 			Assert.Equal(5880027853585448535UL, m.ManifestId);
 			SelectionResult r = FileSelection.Select(m);
@@ -116,7 +116,7 @@ namespace CelesteAndroid.Steam.Tests
 		[Fact]
 		public void Fna_build_validation_rejects_a_depot_without_fna_dll()
 		{
-			// Um depot que não é o build FNA do Linux (ex.: o do Windows, sem FNA.dll) é recusado antes de baixar.
+			// A depot that is not the Linux FNA build (e.g. the Windows one, without FNA.dll) is refused before downloading.
 			ManifestSnapshot m = Fixture.Load();
 			var withoutFna = m with { Files = m.Files.Where(f => f.Path != "FNA.dll").ToList() };
 			Assert.Throws<InvalidOperationException>(() => FileSelection.ValidateIsFnaBuild(withoutFna));

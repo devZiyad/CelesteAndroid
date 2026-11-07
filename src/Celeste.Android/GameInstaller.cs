@@ -16,8 +16,8 @@ using Uri = Android.Net.Uri;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Importa os arquivos do jogo do usuário para o armazenamento interno do app e prepara tudo para rodar:
-	/// cópia (pasta, .zip ou assets do APK pessoal) → patch com MonoMod → fundo das faixas laterais.
+	/// Imports the user's game files into the app's internal storage and prepares everything to run:
+	/// copy (folder, .zip or the personal APK's assets) → MonoMod patch → side-bar background.
 	/// </summary>
 	public sealed class GameInstaller
 	{
@@ -43,13 +43,13 @@ namespace CelesteAndroid
 		public static bool IsInstalled(Context context) =>
 			File.Exists(PatchedDll(context)) && Directory.Exists(Path.Combine(GameDir(context), "Content"));
 
-		/// <summary>APK pessoal: o jogo vem nos assets (build com -p:EmbedGame=true).</summary>
+		/// <summary>Personal APK: the game ships in the assets (build with -p:EmbedGame=true).</summary>
 		public static bool HasEmbeddedGame(Context context) =>
 			context.Assets!.List(GameAssetsRoot)?.Contains("Celeste.exe") == true;
 
-		#region Importação
+		#region Import
 
-		/// <summary>Pasta escolhida pelo usuário (ACTION_OPEN_DOCUMENT_TREE).</summary>
+		/// <summary>Folder chosen by the user (ACTION_OPEN_DOCUMENT_TREE).</summary>
 		public void ImportFolder(Uri treeUri)
 		{
 			progress("Looking for Celeste in the folder…", -1);
@@ -69,7 +69,7 @@ namespace CelesteAndroid
 				(Func<Stream>)(() => resolver.OpenInputStream(DocumentsContract.BuildDocumentUriUsingTree(treeUri, f.doc.Id)!)!))));
 		}
 
-		/// <summary>.zip escolhido pelo usuário (ex.: o zip Linux do itch.io).</summary>
+		/// <summary>.zip chosen by the user (e.g. the Linux zip from itch.io).</summary>
 		public void ImportZip(Uri zipUri)
 		{
 			progress("Reading the .zip…", -1);
@@ -91,7 +91,7 @@ namespace CelesteAndroid
 			CopyAll(entries.Select(e => (e.FullName[prefix.Length..], e.Length, (Func<Stream>)e.Open)));
 		}
 
-		/// <summary>APK pessoal: copia o jogo embutido nos assets.</summary>
+		/// <summary>Personal APK: copies the game embedded in the assets.</summary>
 		public void ImportEmbedded()
 		{
 			progress("Preparing the bundled game…", -1);
@@ -101,8 +101,8 @@ namespace CelesteAndroid
 		}
 
 		/// <summary>
-		/// Saves do PC (ou de outro aparelho): uma pasta com os .celeste, ou a pasta do jogo com Saves/ dentro.
-		/// Os saves atuais vão para Backups/ antes de serem substituídos.
+		/// Saves from a PC (or another device): a folder with the .celeste files, or the game folder with Saves/ inside.
+		/// Current saves go to Backups/ before being replaced.
 		/// </summary>
 		public int ImportSaves(Uri treeUri)
 		{
@@ -167,7 +167,7 @@ namespace CelesteAndroid
 						done += read;
 					}
 				}
-				// Sem tamanho conhecido (assets), o progresso segue a contagem de arquivos.
+				// Without a known size (assets), progress follows the file count.
 				float fraction = size >= 0 ? done / (float)total : (i + 1) / (float)files.Count;
 				if (i % 8 == 0 || i == files.Count - 1)
 					progress($"Copying game files… {i + 1}/{files.Count}", fraction);
@@ -184,9 +184,9 @@ namespace CelesteAndroid
 
 		#endregion
 
-		#region Patch e fundo
+		#region Patch and background
 
-		/// <summary>Gera o Celeste.dll que roda no .NET do Android (MonoMod, no próprio aparelho).</summary>
+		/// <summary>Generates the Celeste.dll that runs on Android's .NET (MonoMod, on the device itself).</summary>
 		public void Patch()
 		{
 			progress("Adapting the game for Android…", -1);
@@ -209,17 +209,17 @@ namespace CelesteAndroid
 				msg => Log.Info(GameActivity.LogTag, msg)
 			);
 			File.Move(staging, patched, overwrite: true);
-			// O MonoMod também grava símbolos de depuração (.mdb) que não usamos.
+			// MonoMod also writes debug symbols (.mdb) that we do not use.
 			foreach (string leftover in Directory.GetFiles(Path.GetDirectoryName(patched)!, "*.mdb"))
 				File.Delete(leftover);
-			// A cópia dos módulos do patcher (dezenas de MB) só serve para esta execução: não deixa nada no cache.
+			// The copy of the patcher modules (tens of MB) is only needed for this run: leave nothing in the cache.
 			if (Directory.Exists(patcherDir))
 				Directory.Delete(patcherDir, recursive: true);
 		}
 
 		/// <summary>
-		/// Apaga o jogo baixado/importado (pasta do jogo, Celeste.dll patcheado, fundo e estado de download) para liberar espaço.
-		/// Os saves e as configurações ficam. Devolve quantos bytes foram liberados.
+		/// Deletes the downloaded/imported game (game folder, patched Celeste.dll, background and download state) to free space.
+		/// Saves and settings are kept. Returns how many bytes were freed.
 		/// </summary>
 		public long DeleteGame()
 		{
@@ -241,7 +241,7 @@ namespace CelesteAndroid
 			return freed;
 		}
 
-		/// <summary>Versão desfocada e escurecida da key art do jogo, para as faixas laterais.</summary>
+		/// <summary>Blurred, darkened version of the game's key art, for the side bars.</summary>
 		public void PrepareBackground()
 		{
 			string art = Path.Combine(GameDir(context), "Content", "Graphics", "SplashScreen.png");
@@ -255,7 +255,7 @@ namespace CelesteAndroid
 			int[] pixels = new int[width * height];
 			small.GetPixels(pixels, 0, width, 0, 0, width, height);
 
-			// Três passadas de box blur ≈ desfoque gaussiano; depois escurece para não competir com o jogo.
+			// Three box-blur passes ≈ Gaussian blur; then darken so it does not compete with the game.
 			for (int pass = 0; pass < 3; pass++)
 			{
 				BoxBlur(pixels, width, height, radius: 7, horizontal: true);
@@ -332,7 +332,7 @@ namespace CelesteAndroid
 			return result;
 		}
 
-		/// <summary>Aceita a própria pasta do jogo ou uma pasta acima dela (ex.: "common" da Steam).</summary>
+		/// <summary>Accepts the game folder itself or a folder above it (e.g. Steam's "common").</summary>
 		private Doc? FindGameRoot(Uri treeUri, Doc dir, int depth)
 		{
 			List<Doc> children = ListChildren(treeUri, dir.Id);
