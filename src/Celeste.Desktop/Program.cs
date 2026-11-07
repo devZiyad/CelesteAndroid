@@ -31,6 +31,12 @@ namespace CelesteAndroid.Desktop
 
 			// Mesmo contrato que o app Android vai usar (ver CelesteAndroid.HostConfig).
 			AppContext.SetData("CelesteAndroid.Platform", "Android");
+			// No desktop o menu de vídeo do Celeste (Fullscreen/Window Scale) fica como no original.
+			AppContext.SetData("CelesteAndroid.Host", "desktop");
+			// Opções do port (JSON / flags); o renderer vira o driver do FNA3D, como no Android.
+			args = PortOptions.Apply(args, hostDir);
+			if (AppContext.GetData("CelesteAndroid.Renderer") is string renderer)
+				SDL3.SDL.SDL_SetHint("FNA3D_FORCE_DRIVER", renderer.StartsWith("gl", StringComparison.OrdinalIgnoreCase) || renderer.StartsWith("opengl", StringComparison.OrdinalIgnoreCase) ? "OpenGL" : "Vulkan");
 			AppContext.SetData("CelesteAndroid.PrefPath", Path.Combine(hostDir, "userdata"));
 
 			// O FNA procura o Content relativo à pasta-base do app; apontamos para a pasta do jogo.
