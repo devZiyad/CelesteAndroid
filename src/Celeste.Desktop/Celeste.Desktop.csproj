@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<!-- Host de desenvolvimento (M1): roda o Celeste patcheado no Windows, com o mesmo fluxo do app Android. -->
+	<!-- Host de desenvolvimento (M1): roda o Celeste patcheado no Linux, com o mesmo fluxo do app Android. -->
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net10.0</TargetFramework>
 		<PlatformTarget>x64</PlatformTarget>
-		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<RuntimeIdentifier>linux-x64</RuntimeIdentifier>
 		<SelfContained>false</SelfContained>
 		<RootNamespace>CelesteAndroid.Desktop</RootNamespace>
 		<AssemblyName>CelesteDesktop</AssemblyName>
@@ -17,8 +17,12 @@
 			ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
 	</ItemGroup>
 	<ItemGroup>
-		<!-- fnalibs (SDL3, FNA3D, FAudio) e FMOD 1.10.14 x64 -->
-		<None Include="$(RepoRoot)natives\win-x64\*.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
-		<None Include="$(RepoRoot)fmod\libs\win-x64\*.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+		<!-- fnalibs linux-x64 (SDL3, FNA3D, FAudio; scripts/fetch-fnalibs.sh) -->
+		<None Include="$(RepoRoot)natives\linux-x64\*.so*" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+		<!-- FMOD 1.10 do jogo (Celeste/lib64, versionado .so.10): o P/Invoke procura libfmod.so / libfmodstudio.so. -->
+		<None Include="$(CelesteGameDir)lib64\libfmod.so.10" Link="libfmod.so" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+		<None Include="$(CelesteGameDir)lib64\libfmodstudio.so.10" Link="libfmodstudio.so" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+		<!-- libfmodstudio.so depende de libfmod.so.10 (soname): também vai com o nome versionado. -->
+		<None Include="$(CelesteGameDir)lib64\libfmod.so.10" CopyToOutputDirectory="PreserveNewest" Visible="false" />
 	</ItemGroup>
 </Project>

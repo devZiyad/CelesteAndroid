@@ -22,7 +22,7 @@ namespace CelesteAndroid.Desktop
 			{
 				CelestePatcher.Patch(celesteExe, modDll, patchedDll, new[] { hostDir, RuntimeEnvironment.GetRuntimeDirectory() });
 			}
-			// Usado pelo scripts/deploy-android.ps1: o mesmo Celeste.dll serve para o Android.
+			// Usado pelo scripts/deploy-android.sh: o mesmo Celeste.dll serve para o Android.
 			if (Array.IndexOf(args, "--patch-only") >= 0)
 			{
 				Console.WriteLine(patchedDll);
@@ -46,6 +46,12 @@ namespace CelesteAndroid.Desktop
 			celeste.GetType("Monocle.Engine", throwOnError: true)!
 				.GetField("AssemblyDirectory", BindingFlags.NonPublic | BindingFlags.Static)!
 				.SetValue(null, gameDir);
+
+			// O Celeste.dll fica em patched/, então o runtime não procura as libs nativas (FMOD) ao lado do host.
+			// libfmodstudio depende do soname libfmod.so.10: carregamos o libfmod antes, por caminho completo.
+			NativeLibrary.TryLoad(Path.Combine(hostDir, "libfmod.so.10"), out _);
+			NativeLibrary.SetDllImportResolver(celeste, (name, asm, path) =>
+				NativeLibrary.TryLoad(Path.Combine(hostDir, "lib" + name + ".so"), out IntPtr handle) ? handle : IntPtr.Zero);
 
 			MethodInfo main = celeste.GetType("Celeste.Celeste", throwOnError: true)!
 				.GetMethod("Main", BindingFlags.NonPublic | BindingFlags.Static)!;
