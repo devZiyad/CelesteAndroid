@@ -29,3 +29,11 @@ obj/
 
 # Arte oficial fornecida pelo usuário (logo etc.)
 /art/
+
+# Local JDK selection (SDKMAN)
+.sdkmanrc
+
+# Signing keys - never commit
+*.jks
+*.keystore
+keystore.env
