@@ -20,15 +20,16 @@ namespace CelesteAndroid
 		/// <summary>"Vulkan" ou "OpenGL" (só informativo aqui: o host escolhe o driver antes do jogo iniciar).</summary>
 		public static string Renderer => Raw("Renderer") ?? "Vulkan";
 
-		/// <summary>Limite de quadros desenhados por segundo; 0 = sem limite.</summary>
+		/// <summary>
+		/// Limite de quadros desenhados por segundo: 30 ou 60. A lógica do Celeste é fixa em 60 Hz, então valores
+		/// maiores (ou "unlimited") viram 60.
+		/// </summary>
 		public static int FrameCap
 		{
 			get
 			{
 				string? v = Raw("FrameCap");
-				if (v == null) return 60;
-				if (v.Equals("unlimited", StringComparison.OrdinalIgnoreCase)) return 0;
-				return int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) && n > 0 ? n : 60;
+				return v != null && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int n) && n > 0 && n < 60 ? n : 60;
 			}
 		}
 
@@ -59,7 +60,10 @@ namespace CelesteAndroid
 		public static void LogApplied(int backBufferWidth, int backBufferHeight)
 		{
 			Log("renderer", Renderer);
-			Log("frame_cap", FrameCap == 0 ? "unlimited" : FrameCap.ToString(CultureInfo.InvariantCulture));
+			string? requestedCap = Raw("FrameCap");
+			string capNote = requestedCap != null && requestedCap != FrameCap.ToString(CultureInfo.InvariantCulture)
+				? " (requested " + requestedCap + ", limited to 60: the game logic is fixed at 60 Hz)" : "";
+			Log("frame_cap", FrameCap.ToString(CultureInfo.InvariantCulture) + capNote);
 			Log("vsync", VSync ? "on" : "off");
 			Log("resolution_scale", ResolutionScale.ToString("0.##", CultureInfo.InvariantCulture));
 			Log("overlay", Overlay.ToString().ToLowerInvariant());

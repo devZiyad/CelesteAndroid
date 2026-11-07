@@ -10,7 +10,7 @@ namespace CelesteAndroid.Desktop
 	/// Opções do port no host desktop, as mesmas da tela "Port settings" do Android. Fontes (a última vence):
 	/// <c>port-settings.json</c> ao lado do host (ou <c>--settings arquivo</c>) e flags de linha de comando.
 	/// Chaves do JSON: renderer, frameCap, vsync, resolutionScale, overlay, overlayCorner, screenFit, integerScaling.
-	/// Flags: --renderer vulkan|opengl, --frame-cap 30|60|90|120|unlimited, --vsync on|off, --res-scale 0.5..1,
+	/// Flags: --renderer vulkan|opengl, --frame-cap 30|60 (higher values become 60), --vsync on|off, --res-scale 0.5..1,
 	/// --overlay off|fps|graph, --corner topleft|topright|bottomleft|bottomright, --screen-fit sideart|blackbars|stretch,
 	/// --integer-scaling on|off.
 	/// </summary>

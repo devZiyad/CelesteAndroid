@@ -37,6 +37,7 @@ namespace CelesteAndroid
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
+			PortSettings.ApplyToAppContext(this); // também migra valores antigos já gravados
 			View root = BuildLayout();
 			SetContentView(root);
 			WatchFocus(root);
@@ -100,7 +101,7 @@ namespace CelesteAndroid
 			scroll.AddView(list);
 			column.AddView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
-			var hint = Text("D-pad / stick  move        ‹ ›  change        A  next        B  back", 12,
+			var hint = Text("D-pad / stick  move        ‹ ›  change value        A  next value        B  back", 12,
 				Color.Argb(150, 255, 255, 255), TypefaceStyle.Normal);
 			column.AddView(hint, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(6) });
 			return root;

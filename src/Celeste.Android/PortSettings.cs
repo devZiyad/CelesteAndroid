@@ -18,8 +18,11 @@ namespace CelesteAndroid
 
 		public static readonly PortSetting Renderer = new("Renderer", "Renderer",
 			new[] { "Vulkan", "OpenGL ES" }, new[] { "Vulkan", "OpenGL" }, 0);
+		// Só 30 e 60: a lógica do Celeste é fixa em 60 Hz, então um limite maior nunca produziria mais quadros.
 		public static readonly PortSetting FrameCap = new("FrameCap", "Frame cap",
-			new[] { "30", "60", "90", "120", "Unlimited" }, new[] { "30", "60", "90", "120", "unlimited" }, 1);
+			new[] { "30", "60" }, new[] { "30", "60" }, 1);
+		// Índices gravados por versões antigas (30/60/90/120/ilimitado): qualquer valor acima de 60 vira 60.
+		private static readonly string[] LegacyFrameCapLabels = { "30", "60", "90", "120", "unlimited" };
 		public static readonly PortSetting VSync = new("VSync", "VSync",
 			new[] { "On", "Off" }, new[] { "true", "false" }, 0);
 		public static readonly PortSetting ResolutionScale = new("ResolutionScale", "Resolution scale",
@@ -54,16 +57,29 @@ namespace CelesteAndroid
 
 		public static string GetValue(Context context, PortSetting setting) => setting.Values[GetIndex(context, setting)];
 
+		/// <summary>Valores gravados que deixaram de existir (limite de quadros &gt; 60) passam a 60.</summary>
+		private static string? MigrateFrameCap(Context context)
+		{
+			ISharedPreferences prefs = Prefs(context);
+			int saved = prefs.GetInt(FrameCap.Key, FrameCap.Default);
+			if (saved < FrameCap.Values.Length || saved >= LegacyFrameCapLabels.Length)
+				return null;
+			prefs.Edit()!.PutInt(FrameCap.Key, FrameCap.Default)!.Apply();
+			return $"saved {LegacyFrameCapLabels[saved]} migrated to {FrameCap.Values[FrameCap.Default]}";
+		}
+
 		public static void Reset(Context context) => Prefs(context).Edit()!.Clear()!.Apply();
 
 		/// <summary>Publica todas as opções no AppContext para o Celeste.dll patcheado ler.</summary>
 		public static void ApplyToAppContext(Context context)
 		{
+			string? migrated = MigrateFrameCap(context);
 			foreach (PortSetting s in All)
 			{
 				string value = GetValue(context, s);
 				AppContext.SetData(ContextPrefix + s.Key, value);
-				Log.Info("CelesteAndroid", $"[CelesteAndroid] host setting {s.Key}={value}");
+				string note = s == FrameCap && migrated != null ? $" ({migrated})" : "";
+				Log.Info("CelesteAndroid", $"[CelesteAndroid] host setting {s.Key}={value}{note}");
 			}
 		}
 	}

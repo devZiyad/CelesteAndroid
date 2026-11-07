@@ -34,9 +34,9 @@ namespace Monocle
 		protected override void Update(GameTime gameTime)
 		{
 			orig_Update(gameTime);
-			// A lógica do Celeste roda a 60 Hz fixos (a física depende disso). O limite de quadros só reduz
-			// o desenho: 30 = um quadro a cada dois updates; 60 ou mais = todo update (não há quadros novos além de 60).
-			if (PortConfig.FrameCap is > 0 and < 60 && (updateCount++ % (60 / PortConfig.FrameCap)) != 0)
+			// A lógica do Celeste roda a 60 Hz fixos (a física depende disso), então o limite é 30 ou 60:
+			// 30 = um quadro a cada dois updates; 60 = todo update.
+			if (PortConfig.FrameCap < 60 && (updateCount++ % (60 / PortConfig.FrameCap)) != 0)
 			{
 				SuppressDraw();
 			}
