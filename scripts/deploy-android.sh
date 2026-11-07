@@ -3,6 +3,7 @@
 # Usage: scripts/deploy-android.sh [--content] [--no-launch] [--release]
 #   --content    also pushes Celeste.exe and the Content folder (1 GB; first time, new package ID, or when it changes)
 #   --play       launch straight into the game instead of stopping at the launcher
+#   --no-files   install the app only: do not push the patched Celeste.dll (e.g. to test the on-device Steam install)
 #   --release    install out/CelesteAndroid-<version>.apk (org.devziyad.celeste, release-signed) instead of the
 #                debug build (org.devziyad.celeste.debug, "Celeste (debug)"); both can be installed together
 # Uses the device in $ANDROID_SERIAL.
@@ -15,13 +16,14 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
-CONTENT=0; LAUNCH=1; RELEASE=0; PLAY=0
+CONTENT=0; LAUNCH=1; RELEASE=0; PLAY=0; NOFILES=0
 for a in "$@"; do
 	case "$a" in
 		--content) CONTENT=1 ;;
 		--no-launch) LAUNCH=0 ;;
 		--release) RELEASE=1 ;;
 		--play) PLAY=1 ;;
+		--no-files) NOFILES=1 ;;
 		*) die "unknown argument: $a" ;;
 	esac
 done
@@ -130,6 +132,9 @@ fi
 
 # /data/local/tmp is readable by the app; run-as copies into its private storage (files/).
 # (run-as needs a debuggable build; with --release the launcher imports the game itself.)
+if [ "$NOFILES" = 1 ]; then
+	echo "=== files: skipped (--no-files) ==="
+else
 echo "=== files ==="
 TMP=/data/local/tmp/celeste
 "${ADB[@]}" shell "rm -rf $TMP && mkdir -p $TMP/patched"
@@ -143,6 +148,7 @@ if "${ADB[@]}" shell "run-as $PKG true" >/dev/null 2>&1; then
 	"${ADB[@]}" shell "chmod -R a+rX $TMP && run-as $PKG sh -c 'mkdir -p files && cp -r $TMP/* files/' && rm -rf $TMP"
 else
 	echo "note: $PKG is not debuggable; files left in $TMP for the launcher to import."
+fi
 fi
 
 if [ "$DEBUGGABLE" = 1 ]; then

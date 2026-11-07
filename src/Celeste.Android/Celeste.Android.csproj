@@ -80,6 +80,10 @@
 		<ProjectReference Include="..\..\external\FNA\FNA.Core.csproj" />
 		<ProjectReference Include="..\Steamworks.NET\Steamworks.NET.csproj" />
 		<ProjectReference Include="..\Celeste.Patcher\Celeste.Patcher.csproj" />
+		<!-- Instalação pela Steam (SteamKit2): lógica pura em Celeste.Steam, com testes em tests/. -->
+		<ProjectReference Include="..\Celeste.Steam\Celeste.Steam.csproj" />
+		<!-- QR code do login (só a matriz de módulos; o desenho é feito com Android.Graphics). -->
+		<PackageReference Include="QRCoder" Version="1.8.1" />
 		<!-- Só para compilar antes; o .dll vai como asset (ver _AddPatcherAssets). -->
 		<ProjectReference Include="..\Celeste.Android.Patches\Celeste.Android.Patches.csproj"
 			ReferenceOutputAssembly="false" OutputItemType="CelestePatchModule" />

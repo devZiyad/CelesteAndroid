@@ -33,6 +33,7 @@ namespace CelesteAndroid
 		private const int RequestFolder = 1;
 		private const int RequestZip = 2;
 		private const int RequestSaves = 3;
+		private const int RequestSteam = 4;
 		private const string LogTag = "CelesteLauncher";
 
 		private static readonly Color Night = Color.ParseColor("#120C22");
@@ -42,7 +43,11 @@ namespace CelesteAndroid
 		private LinearLayout panel = null!;
 		private TextView status = null!;
 		private Button play = null!;
-		private Button openFolder = null!;
+		private Button steamButton = null!;
+		private TextView importFolder = null!;
+		private TextView deleteGame = null!;
+		private LinearLayout links2 = null!;
+		private TextView deleteSeparator = null!;
 		private TextView openZip = null!;
 		private TextView importSaves = null!;
 		private TextView settingsLink = null!;
@@ -102,6 +107,13 @@ namespace CelesteAndroid
 					Play();
 				}
 			}
+			// Desenvolvimento (adb shell am start ... --ez steam true [--ez recordManifest true]): abre a instalação pela Steam.
+			if (!busy && Intent!.GetBooleanExtra("steam", false))
+			{
+				bool record = Intent.GetBooleanExtra(SteamActivity.ExtraRecordManifest, false);
+				Intent.RemoveExtra("steam");
+				StartSteam(record);
+			}
 			// APK pessoal: o jogo já vem dentro do APK; instala sozinho na primeira abertura.
 			else if (!busy && !GameInstaller.IsInstalled(this) && GameInstaller.HasEmbeddedGame(this))
 			{
@@ -141,10 +153,16 @@ namespace CelesteAndroid
 		}
 
 		protected override string Tag => LogTag;
-		protected override View? InitialFocus() => play.Enabled ? play : openFolder;
+		protected override View? InitialFocus() => play.Enabled ? play : steamButton;
 		protected override bool InputBlocked => busy;
 		protected override void OnBackButton()
 		{
+			if (confirmOverlay != null)
+			{
+				Log.Info(LogTag, "back: close confirmation");
+				DismissConfirm();
+				return;
+			}
 			Log.Info(LogTag, "back: exit launcher");
 			Finish();
 		}
@@ -155,6 +173,7 @@ namespace CelesteAndroid
 		{
 			var root = new FrameLayout(this);
 			root.SetBackgroundColor(Night);
+			rootLayout = root;
 
 			art = new ImageView(this);
 			art.SetScaleType(ImageView.ScaleType.CenterCrop);
@@ -205,12 +224,15 @@ namespace CelesteAndroid
 			MakeFocusable(play, "Play");
 			panel.AddView(play, new LinearLayout.LayoutParams(Dp(260), Dp(50)) { TopMargin = Dp(14) });
 
-			openFolder = PillButton("Open game files", filled: false);
-			openFolder.Click += (_, _) => PickFolder();
-			MakeFocusable(openFolder, "OpenGameFiles");
-			panel.AddView(openFolder, new LinearLayout.LayoutParams(Dp(260), Dp(44)) { TopMargin = Dp(10) });
+			steamButton = PillButton("Install from Steam", filled: false);
+			steamButton.Click += (_, _) => StartSteam(record: false);
+			MakeFocusable(steamButton, "InstallFromSteam");
+			panel.AddView(steamButton, new LinearLayout.LayoutParams(Dp(260), Dp(44)) { TopMargin = Dp(10) });
 
 			links = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			importFolder = LinkText("Import folder");
+			importFolder.Click += (_, _) => PickFolder();
+			MakeFocusable(importFolder, "ImportFolder");
 			openZip = LinkText("Import .zip");
 			openZip.Click += (_, _) => PickZip();
 			MakeFocusable(openZip, "ImportZip");
@@ -220,12 +242,21 @@ namespace CelesteAndroid
 			settingsLink = LinkText("Port settings");
 			settingsLink.Click += (_, _) => StartActivity(new Intent(this, typeof(PortSettingsActivity)));
 			MakeFocusable(settingsLink, "PortSettings");
+			deleteGame = LinkText("Delete game files");
+			deleteGame.Click += (_, _) => ConfirmDeleteGame();
+			MakeFocusable(deleteGame, "DeleteGameFiles");
+			links.AddView(importFolder);
+			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 8, right: 8));
 			links.AddView(openZip);
-			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
+			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 8, right: 8));
 			links.AddView(importSaves);
-			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
-			links.AddView(settingsLink);
-			panel.AddView(links, Margins(top: 6, left: 6));
+			panel.AddView(links, Margins(top: 4, left: 6));
+			links2 = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			links2.AddView(settingsLink);
+			deleteSeparator = Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal);
+			links2.AddView(deleteSeparator, Margins(left: 8, right: 8));
+			links2.AddView(deleteGame);
+			panel.AddView(links2, Margins(top: 0, left: 6));
 
 			progressBox = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
 			progressBar = new ProgressBar(this, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Max = 1000 };
@@ -336,17 +367,25 @@ namespace CelesteAndroid
 			bool installed = GameInstaller.IsInstalled(this);
 			play.Enabled = installed && !busy;
 			play.Alpha = play.Enabled ? 1f : 0.4f;
-			openFolder.Enabled = !busy;
+			steamButton.Enabled = !busy;
+			importFolder.Enabled = !busy;
 			openZip.Enabled = !busy;
 			importSaves.Enabled = !busy;
+			deleteGame.Enabled = !busy;
+			deleteGame.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
+			deleteSeparator.Visibility = deleteGame.Visibility;
 			// A tela é baixa (~360dp): durante a instalação a barra de progresso ocupa o lugar dos links.
 			links.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
-			openFolder.Text = installed ? "Change game files" : "Open game files";
+			links2.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
+			steamButton.Text = installed ? "Update from Steam" : "Install from Steam";
 			if (!busy)
 			{
+				bool paused = File.Exists(SteamTokenStore.ResumeStatePath(this));
 				status.Text = installed
 					? "✓  Ready to play"
-					: "Pick the folder of your Celeste PC copy (FNA / \"opengl\" build) or the itch.io .zip.";
+					: paused
+						? "Download paused: choose Install from Steam to resume."
+						: "Install Celeste from your Steam account, or import the folder of your PC copy / the Linux .zip.";
 			}
 			EnsureFocus();
 		}
@@ -358,6 +397,76 @@ namespace CelesteAndroid
 			if (driver == "OpenGL")
 				intent.PutExtra(GameActivity.ExtraDriver, driver);
 			StartActivity(intent);
+		}
+
+		/// <summary>Instala (ou atualiza) o jogo pela Steam; o download retoma de onde parou.</summary>
+		private void StartSteam(bool record)
+		{
+			var intent = new Intent(this, typeof(SteamActivity));
+			if (record)
+				intent.PutExtra(SteamActivity.ExtraRecordManifest, true);
+			StartActivityForResult(intent, RequestSteam);
+		}
+
+		private FrameLayout rootLayout = null!;
+		private View? confirmOverlay;
+		private View? focusBeforeConfirm;
+
+		private void ConfirmDeleteGame() =>
+			ShowConfirm("Delete game files?",
+				"This frees the space used by the game (about 1.2 GB). Your saves and settings are kept; you can install again from Steam or import the game.",
+				"Delete", () => RunJob(installer =>
+				{
+					long freed = installer.DeleteGame();
+					RunOnUiThread(LoadArt);
+					return $"✓  Game files deleted ({freed / (1024 * 1024)} MB freed)";
+				}));
+
+		/// <summary>Confirmação no mesmo visual do launcher: foco visível, Cancel focado primeiro, A confirma e B cancela.</summary>
+		private void ShowConfirm(string title, string message, string confirmText, Action onConfirm)
+		{
+			if (confirmOverlay != null) return;
+			focusBeforeConfirm = CurrentFocus;
+			panel.DescendantFocusability = DescendantFocusability.BlockDescendants;
+
+			var overlay = new FrameLayout(this) { Clickable = true };
+			overlay.SetBackgroundColor(Color.Argb(205, 8, 5, 18));
+			var card = new LinearLayout(this) { Orientation = Orientation.Vertical };
+			var cardShape = new GradientDrawable();
+			cardShape.SetCornerRadius(Dp(22));
+			cardShape.SetColor(Color.ParseColor("#1F1636"));
+			cardShape.SetStroke(Dp(1.5f), Color.Argb(120, 242, 184, 216));
+			card.Background = cardShape;
+			card.SetPadding(Dp(26), Dp(22), Dp(26), Dp(20));
+			card.AddView(Text(title, 22, Color.White, TypefaceStyle.Bold));
+			var body = Text(message, 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			card.AddView(body, Margins(top: 8));
+
+			var buttons = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			buttons.SetGravity(GravityFlags.End);
+			Button cancel = PillButton("Cancel", filled: false);
+			MakeFocusable(cancel, "ConfirmCancel");
+			cancel.Click += (_, _) => DismissConfirm();
+			Button confirm = PillButton(confirmText, filled: true);
+			MakeFocusable(confirm, "ConfirmYes");
+			confirm.Click += (_, _) => { DismissConfirm(); onConfirm(); };
+			buttons.AddView(cancel, new LinearLayout.LayoutParams(Dp(140), Dp(44)));
+			buttons.AddView(confirm, new LinearLayout.LayoutParams(Dp(140), Dp(44)) { LeftMargin = Dp(12) });
+			card.AddView(buttons, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(18) });
+
+			overlay.AddView(card, new FrameLayout.LayoutParams(Dp(520), ViewGroup.LayoutParams.WrapContent, GravityFlags.Center));
+			rootLayout.AddView(overlay, Match());
+			confirmOverlay = overlay;
+			cancel.RequestFocus();
+		}
+
+		private void DismissConfirm()
+		{
+			if (confirmOverlay == null) return;
+			rootLayout.RemoveView(confirmOverlay);
+			confirmOverlay = null;
+			panel.DescendantFocusability = DescendantFocusability.AfterDescendants;
+			(focusBeforeConfirm ?? play).RequestFocus();
 		}
 
 		private void PickFolder()
@@ -377,6 +486,12 @@ namespace CelesteAndroid
 		protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
 		{
 			base.OnActivityResult(requestCode, resultCode, data);
+			if (requestCode == RequestSteam)
+			{
+				LoadArt();
+				RefreshState();
+				return;
+			}
 			Uri? uri = data?.Data;
 			if (resultCode != Result.Ok || uri == null)
 				return;

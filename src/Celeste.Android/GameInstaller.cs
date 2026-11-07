@@ -212,6 +212,33 @@ namespace CelesteAndroid
 			// O MonoMod também grava símbolos de depuração (.mdb) que não usamos.
 			foreach (string leftover in Directory.GetFiles(Path.GetDirectoryName(patched)!, "*.mdb"))
 				File.Delete(leftover);
+			// A cópia dos módulos do patcher (dezenas de MB) só serve para esta execução: não deixa nada no cache.
+			if (Directory.Exists(patcherDir))
+				Directory.Delete(patcherDir, recursive: true);
+		}
+
+		/// <summary>
+		/// Apaga o jogo baixado/importado (pasta do jogo, Celeste.dll patcheado, fundo e estado de download) para liberar espaço.
+		/// Os saves e as configurações ficam. Devolve quantos bytes foram liberados.
+		/// </summary>
+		public long DeleteGame()
+		{
+			progress("Deleting the game files…", -1);
+			long freed = 0;
+			foreach (string dir in new[] { GameDir(context), GameDir(context) + ".importing", Path.GetDirectoryName(PatchedDll(context))!, Path.Combine(Files(context), "steam", "resume") })
+			{
+				if (!Directory.Exists(dir)) continue;
+				freed += Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length);
+				Directory.Delete(dir, recursive: true);
+			}
+			foreach (string file in new[] { BackgroundPng(context), Path.Combine(Files(context), "steam", "resume.json"), Path.Combine(Files(context), "steam", "resume.json.tmp"),
+				Path.Combine(Files(context), "steam", "manifest-record.json") })
+			{
+				if (!File.Exists(file)) continue;
+				freed += new FileInfo(file).Length;
+				File.Delete(file);
+			}
+			return freed;
 		}
 
 		/// <summary>Versão desfocada e escurecida da key art do jogo, para as faixas laterais.</summary>
