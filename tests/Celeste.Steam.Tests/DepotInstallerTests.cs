@@ -229,6 +229,23 @@ namespace CelesteAndroid.Steam.Tests
 		}
 
 		[Fact]
+		public async Task The_file_counter_advances_while_downloading_and_never_exceeds_the_total()
+		{
+			using var dir = new TempDir();
+			(ManifestSnapshot m, FakeDepot depot) = Game();
+			var events = new System.Collections.Concurrent.ConcurrentQueue<InstallProgress>();
+			await Installer(dir, depot, events.Enqueue).InstallAsync(m, CancellationToken.None);
+
+			List<InstallProgress> downloading = events.Where(p => p.Phase == "Downloading").ToList();
+			int needed = FileSelection.Select(m).Needed.Count;
+			// Files are counted as soon as their last chunk is written, not only in the verify phase.
+			Assert.Contains(downloading, p => p.FilesDone > 0);
+			Assert.All(events, p => Assert.InRange(p.FilesDone, 0, needed));
+			Assert.Contains(events, p => p.Phase == "Verifying");
+			Assert.Equal(needed, events.Last().FilesDone);
+		}
+
+		[Fact]
 		public async Task Cancellation_keeps_the_resume_state()
 		{
 			using var dir = new TempDir();

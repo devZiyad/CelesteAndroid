@@ -63,11 +63,14 @@ namespace CelesteAndroid.Steam
 			{
 				for (int round = 0; round < 2; round++)
 				{
-					List<(ManifestFile File, int Index)> work = PrepareFiles(selection.Needed, state, progress);
+					progress.Reset();
+					var remaining = new Dictionary<string, int>(StringComparer.Ordinal);
+					List<(ManifestFile File, int Index)> work = PrepareFiles(selection.Needed, state, progress, remaining);
 					progress.Phase("Downloading");
-					await DownloadChunksAsync(work, state, progress, cancellationToken).ConfigureAwait(false);
+					await DownloadChunksAsync(work, state, progress, remaining, cancellationToken).ConfigureAwait(false);
 
 					progress.Phase("Verifying");
+					progress.SetFilesDone(state.VerifiedFiles.Count);
 					List<ManifestFile> bad = await VerifyAsync(selection.Needed, state, progress, cancellationToken).ConfigureAwait(false);
 					if (bad.Count == 0)
 						break;
@@ -93,7 +96,7 @@ namespace CelesteAndroid.Steam
 		private string PathOf(ManifestFile file) => System.IO.Path.Combine(root, file.Path.Replace('/', System.IO.Path.DirectorySeparatorChar));
 
 		/// <summary>Creates/adjusts the files and returns the chunks still missing.</summary>
-		private List<(ManifestFile, int)> PrepareFiles(IReadOnlyList<ManifestFile> needed, ResumeState state, ProgressTracker progress)
+		private List<(ManifestFile, int)> PrepareFiles(IReadOnlyList<ManifestFile> needed, ResumeState state, ProgressTracker progress, Dictionary<string, int> remaining)
 		{
 			var work = new List<(ManifestFile, int)>();
 			foreach (ManifestFile file in needed)
@@ -124,16 +127,21 @@ namespace CelesteAndroid.Steam
 				}
 
 				HashSet<int> have = state.Chunks.TryGetValue(file.Path, out var set) ? set : (state.Chunks[file.Path] = new HashSet<int>());
+				int missing = 0;
 				for (int i = 0; i < file.Chunks.Count; i++)
 				{
 					if (have.Contains(i)) progress.AddDone(file.Chunks[i].UncompressedLength, fileDone: false);
-					else work.Add((file, i));
+					else { work.Add((file, i)); missing++; }
 				}
+				// "Files" counts files whose data is fully on disk: those already complete count from the start,
+				// the others as soon as their last chunk is written.
+				if (missing == 0) progress.AddFilesDone(1);
+				else remaining[file.Path] = missing;
 			}
 			return work;
 		}
 
-		private async Task DownloadChunksAsync(List<(ManifestFile File, int Index)> work, ResumeState state, ProgressTracker progress, CancellationToken ct)
+		private async Task DownloadChunksAsync(List<(ManifestFile File, int Index)> work, ResumeState state, ProgressTracker progress, Dictionary<string, int> remaining, CancellationToken ct)
 		{
 			var lastSave = new Stopwatch2();
 			var stateLock = new object();
@@ -156,16 +164,18 @@ namespace CelesteAndroid.Steam
 					System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
 				}
 
+				bool fileComplete;
 				lock (stateLock)
 				{
 					state.Chunks[file.Path].Add(index);
+					fileComplete = --remaining[file.Path] == 0;
 					if (lastSave.ElapsedSeconds() >= 2)
 					{
 						state.Save(stateFile);
 						lastSave.Restart();
 					}
 				}
-				progress.AddDone(chunk.UncompressedLength, fileDone: false, current: file.Path);
+				progress.AddDone(chunk.UncompressedLength, fileDone: fileComplete, current: file.Path);
 			}).ConfigureAwait(false);
 		}
 
@@ -200,7 +210,7 @@ namespace CelesteAndroid.Steam
 					if (ok)
 					{
 						state.VerifiedFiles.Add(file.Path);
-						progress.AddFilesDone(1);
+						progress.AddFilesDone(1, file.Path);
 					}
 					else
 					{
@@ -267,10 +277,25 @@ namespace CelesteAndroid.Steam
 				if (startDone < 0) Interlocked.CompareExchange(ref startDone, now - bytes, -1);
 				if (fileDone) Interlocked.Increment(ref filesDone);
 				if (current != null) this.current = current;
-				Emit(force: false);
+				Emit(force: fileDone); // a finished file always updates the counter, the rest is throttled
 			}
 
-			public void AddFilesDone(int n) { Interlocked.Add(ref filesDone, n); Emit(force: true); }
+			public void AddFilesDone(int n, string? current = null)
+			{
+				Interlocked.Add(ref filesDone, n);
+				if (current != null) this.current = current;
+				Emit(force: current == null);
+			}
+
+			public void SetFilesDone(int n) { Interlocked.Exchange(ref filesDone, n); Emit(force: true); }
+
+			/// <summary>New round (after files failed verification): counters start again; the speed clock keeps running.</summary>
+			public void Reset()
+			{
+				Interlocked.Exchange(ref done, 0);
+				Interlocked.Exchange(ref startDone, -1);
+				Interlocked.Exchange(ref filesDone, 0);
+			}
 
 			private void Emit(bool force)
 			{
