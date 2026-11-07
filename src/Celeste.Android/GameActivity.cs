@@ -3,6 +3,8 @@ using System.Reflection;
 using Android.App;
 using Android.Content.PM;
 using Android.OS;
+using Android.Views;
+using Android.Window;
 using Android.Util;
 using Microsoft.Xna.Framework;
 using Org.Libsdl.App;
@@ -38,6 +40,25 @@ namespace CelesteAndroid
 			base.OnCreate(savedInstanceState);
 			// On Android, FMOD needs the Context for audio and for reading files.
 			Org.Fmod.FMOD.Init(this);
+			// Android Back is Celeste's pause/back key (Escape). With predictive back (targetSdk 36) the key event never arrives, so
+			// the callback sends the Escape press; below Android 13 OnBackPressed does.
+			if (OperatingSystem.IsAndroidVersionAtLeast(33))
+				OnBackInvokedDispatcher.RegisterOnBackInvokedCallback(0, new BackCallback(this));
+		}
+
+		[Obsolete]
+		public override void OnBackPressed() => PressEscape();
+
+		private void PressEscape()
+		{
+			// Celeste polls the keyboard state each frame: keep the key down for a few frames.
+			SDLActivity.OnNativeKeyDown((int)Keycode.Escape);
+			new Handler(Looper.MainLooper!).PostDelayed(() => SDLActivity.OnNativeKeyUp((int)Keycode.Escape), 80);
+		}
+
+		private sealed class BackCallback(GameActivity owner) : Java.Lang.Object, IOnBackInvokedCallback
+		{
+			public void OnBackInvoked() => owner.PressEscape();
 		}
 
 		protected override void OnDestroy()
