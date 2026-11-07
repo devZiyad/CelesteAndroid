@@ -4,8 +4,8 @@
 		<SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
 		<OutputType>Exe</OutputType>
 		<RootNamespace>CelesteAndroid</RootNamespace>
-		<ApplicationId>org.celesteandroid.celeste</ApplicationId>
-		<ApplicationTitle>Celeste</ApplicationTitle>
+		<ApplicationId>org.devziyad.celeste</ApplicationId>
+		<ApplicationTitle>Celeste (dev)</ApplicationTitle>
 		<ApplicationVersion>3</ApplicationVersion>
 		<ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
 		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
@@ -25,14 +25,14 @@
 		<NoWarn>$(NoWarn);CS8618;CS8625;CS8766;CS1572;BG8A04;BG8A00;BG8403</NoWarn>
 	</PropertyGroup>
 	<PropertyGroup>
-		<!-- Arte extraída dos arquivos do jogo do usuário por scripts/generate-game-art.ps1 (fora do git). -->
+		<!-- Arte extraída dos arquivos do jogo do usuário por scripts/generate-game-art.sh (fora do git). -->
 		<GameArtDir>$(MSBuildThisFileDirectory)GameArt\</GameArtDir>
 		<!-- Ícone (todas as builds, se gerado) e arte do launcher/logo (-p:UseGameArt=false a remove: build público). -->
 		<HasGameIcon Condition="Exists('$(GameArtDir)icon\res\mipmap-xxxhdpi\ic_celeste.png')">true</HasGameIcon>
 		<HasGameArt Condition="'$(UseGameArt)' != 'false' and Exists('$(GameArtDir)art\res')">true</HasGameArt>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(AndroidSigningKeyStore)' != ''">
-		<!-- Assinatura de release: passada pelo scripts/build-release.ps1, nunca commitada. -->
+		<!-- Assinatura de release: passada pelo scripts/build-release.sh, nunca commitada. -->
 		<AndroidKeyStore>true</AndroidKeyStore>
 	</PropertyGroup>
 	<ItemGroup>

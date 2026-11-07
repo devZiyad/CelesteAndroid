@@ -14,8 +14,8 @@ namespace CelesteAndroid
 	/// cada partida começa num processo novo, e o processo morre quando o jogo fecha.
 	/// </summary>
 	[Activity(
-		Name = "org.celesteandroid.celeste.GameActivity",
-		Label = "Celeste",
+		Name = "org.devziyad.celeste.GameActivity",
+		Label = "Celeste (dev)",
 		Process = ":game",
 		Exported = false,
 		Theme = "@style/Theme.Celeste",

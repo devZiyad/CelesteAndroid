@@ -20,11 +20,11 @@ obj/
 .vs/
 *.user
 
-# fnalibs baixadas (ver scripts/fetch-fnalibs.ps1)
+# fnalibs baixadas (ver scripts/fetch-fnalibs.sh)
 /natives/
 /build/
 
-# Arte extraída do jogo do usuário (scripts/generate-game-art.ps1)
+# Arte extraída do jogo do usuário (scripts/generate-game-art.sh)
 /src/Celeste.Android/GameArt/
 
 # Arte oficial fornecida pelo usuário (logo etc.)

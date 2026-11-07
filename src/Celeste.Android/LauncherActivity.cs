@@ -20,8 +20,8 @@ namespace CelesteAndroid
 	/// Tela inicial: key art do jogo, importação dos arquivos do jogo e botão de jogar.
 	/// </summary>
 	[Activity(
-		Name = "org.celesteandroid.celeste.LauncherActivity",
-		Label = "Celeste",
+		Name = "org.devziyad.celeste.LauncherActivity",
+		Label = "Celeste (dev)",
 		MainLauncher = true,
 		Exported = true,
 		Theme = "@style/Theme.Celeste",
@@ -84,8 +84,8 @@ namespace CelesteAndroid
 			HideSystemBars();
 			RefreshState();
 
-			// Desenvolvimento: arquivos já copiados por scripts/deploy-android.ps1; só patch + fundo.
-			// adb shell am start -n org.celesteandroid.celeste/.LauncherActivity --ez repatch true
+			// Desenvolvimento: arquivos já copiados por scripts/deploy-android.sh; só patch + fundo.
+			// adb shell am start -n org.devziyad.celeste/.LauncherActivity --ez repatch true
 			if (!busy && Intent!.GetBooleanExtra("repatch", false))
 			{
 				Intent.RemoveExtra("repatch");
