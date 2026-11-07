@@ -77,10 +77,22 @@ namespace CelesteAndroid
 			}
 		}
 
+		/// <summary>Deletes the stored session and its Keystore key (a new key is made on the next sign-in).</summary>
 		public static void Clear(Android.Content.Context context)
 		{
 			if (File.Exists(FilePath(context)))
 				File.Delete(FilePath(context));
+			try
+			{
+				var store = KeyStore.GetInstance(Provider)!;
+				store.Load(null);
+				if (store.ContainsAlias(KeyAlias))
+					store.DeleteEntry(KeyAlias);
+			}
+			catch (Exception)
+			{
+				// Without the file the key protects nothing; ignore a Keystore that refuses to delete it.
+			}
 		}
 	}
 }

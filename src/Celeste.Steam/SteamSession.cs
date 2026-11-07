@@ -397,6 +397,49 @@ namespace CelesteAndroid.Steam
 
 		#endregion
 
+		/// <summary>
+		/// Best effort: asks Steam to revoke the refresh token of this app's own sign-in (the most recently used token named like
+		/// this app's device), so it stops working even if a copy exists somewhere. Returns false when it could not be done;
+		/// the caller deletes the local token either way. Needs a logged-on session.
+		/// </summary>
+		public async Task<bool> TryRevokeOwnRefreshTokenAsync(CancellationToken ct)
+		{
+			try
+			{
+				var unified = client.GetHandler<SteamUnifiedMessages>()!;
+				var list = await unified.SendMessage<CAuthentication_RefreshToken_Enumerate_Request, CAuthentication_RefreshToken_Enumerate_Response>(
+					"Authentication.EnumerateTokens#1", new CAuthentication_RefreshToken_Enumerate_Request()).ToTask().ConfigureAwait(false);
+				if (list.Result != EResult.OK)
+				{
+					log($"steam: could not list the refresh tokens ({list.Result})");
+					return false;
+				}
+				var ours = list.Body.refresh_tokens
+					.Where(t => t.token_description == Details().DeviceFriendlyName)
+					.OrderByDescending(t => t.time_updated)
+					.FirstOrDefault();
+				if (ours == null)
+				{
+					log("steam: no refresh token of this app was found to revoke");
+					return false;
+				}
+				var revoke = await unified.SendMessage<CAuthentication_RefreshToken_Revoke_Request, CAuthentication_RefreshToken_Revoke_Response>(
+					"Authentication.RevokeRefreshToken#1", new CAuthentication_RefreshToken_Revoke_Request
+					{
+						token_id = ours.token_id,
+						steamid = client.SteamID!.ConvertToUInt64(),
+						revoke_action = EAuthTokenRevokeAction.k_EAuthTokenRevokePermanent,
+					}).ToTask().ConfigureAwait(false);
+				log($"steam: refresh token revoke: {revoke.Result}");
+				return revoke.Result == EResult.OK;
+			}
+			catch (Exception e) when (e is not OperationCanceledException)
+			{
+				log("steam: could not revoke the refresh token: " + e.GetType().Name);
+				return false;
+			}
+		}
+
 		public void Logout()
 		{
 			try { if (IsLoggedOn) user.LogOff(); } catch (Exception) { }

@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using Android.App;
+using Android.Content;
 using Android.Content.PM;
 using Android.Graphics;
 using Android.Graphics.Drawables;
@@ -12,8 +14,8 @@ using Color = Android.Graphics.Color;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// "Port settings": renderer, frame cap, vsync, resolution scale, overlay and screen fit.
-	/// Controller: up/down pick the row, left/right (or A) change the value, B goes back.
+	/// "Port settings": the port's options (renderer, frame cap, autoplay...) and the launcher-only actions: Check for updates and the
+	/// Steam account (name, Sign out, Switch account). Controller: up/down pick the row, left/right (or A) change the value, B goes back.
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.PortSettingsActivity",
@@ -30,6 +32,8 @@ namespace CelesteAndroid
 
 		private readonly Dictionary<View, (PortSetting Setting, TextView Value)> rows = new();
 		private View? firstRow;
+		private TextView message = null!, accountText = null!;
+		private View signOutRow = null!, switchRow = null!;
 
 		protected override string Tag => LogTag;
 		protected override View? InitialFocus() => firstRow;
@@ -48,7 +52,40 @@ namespace CelesteAndroid
 		{
 			base.OnResume();
 			HideSystemBars();
+			RefreshAccount();
 			EnsureFocus();
+		}
+
+		private void RefreshAccount()
+		{
+			string? name = SteamAccount.Name(this);
+			accountText.Text = name == null ? "Not signed in to Steam" : "Signed in as " + name;
+			signOutRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
+			switchRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
+		}
+
+		private async void SignOut(bool thenSignInAgain)
+		{
+			message.Text = "Signing out…";
+			try
+			{
+				await SteamAccount.SignOutAsync(this);
+			}
+			catch (Exception e)
+			{
+				Log.Error(LogTag, "sign out failed: " + e.Message);
+			}
+			RefreshAccount();
+			EnsureFocus();
+			if (thenSignInAgain)
+			{
+				message.Text = "";
+				StartActivity(new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraForceLogin, true).PutExtra(SteamActivity.ExtraUpdate, true));
+			}
+			else
+			{
+				message.Text = "Signed out. Your game files and saves were kept.";
+			}
 		}
 
 		protected override bool OnHorizontal(int direction)
@@ -90,14 +127,32 @@ namespace CelesteAndroid
 			title.LetterSpacing = 0.06f;
 			column.AddView(title, new LinearLayout.LayoutParams(-2, -2) { BottomMargin = Dp(6) });
 
-			var list = new LinearLayout(this) { Orientation = Orientation.Vertical };
+			message = Text("", 14, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			column.AddView(message, new LinearLayout.LayoutParams(-2, -2) { BottomMargin = Dp(2) });
+
+			// No fixed heights: rows are as tall as their text plus padding, with a margin so the focus outline is never clipped.
+			var list = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
+			list.SetPadding(Dp(4), Dp(4), Dp(4), Dp(4));
 			foreach (PortSetting setting in PortSettings.All)
-				list.AddView(Row(setting), new LinearLayout.LayoutParams(-1, Dp(44)));
+				list.AddView(Row(setting), RowParams());
+
+			// Launcher-only: not part of the in-game PORT section.
+			list.AddView(Section("Steam"), new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(10), LeftMargin = Dp(16) });
+			accountText = Text("", 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			list.AddView(accountText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4), TopMargin = Dp(2) });
+			list.AddView(ActionRow("Check for updates", "CheckForUpdates", () =>
+				StartActivity(new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraUpdate, true))), RowParams());
+			signOutRow = ActionRow("Sign out", "SignOut", () => SignOut(thenSignInAgain: false));
+			list.AddView(signOutRow, RowParams());
+			switchRow = ActionRow("Switch account", "SwitchAccount", () => SignOut(thenSignInAgain: true));
+			list.AddView(switchRow, RowParams());
 
 			var reset = Row(null);
-			list.AddView(reset, new LinearLayout.LayoutParams(-1, Dp(44)));
+			list.AddView(reset, RowParams(topMargin: 10));
 
 			var scroll = new ScrollView(this) { VerticalScrollBarEnabled = false };
+			scroll.SetClipChildren(false);
+			scroll.SetClipToPadding(false);
 			scroll.AddView(list);
 			column.AddView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
@@ -112,7 +167,8 @@ namespace CelesteAndroid
 		{
 			var row = new LinearLayout(this) { Orientation = Orientation.Horizontal };
 			row.SetGravity(GravityFlags.CenterVertical);
-			row.SetPadding(Dp(16), 0, Dp(16), 0);
+			row.SetPadding(Dp(16), Dp(9), Dp(16), Dp(9));
+			row.SetMinimumHeight(Dp(44));
 			row.Background = FocusBackground();
 			string name = setting?.Key ?? "ResetDefaults";
 			MakeFocusable(row, name);
@@ -138,6 +194,30 @@ namespace CelesteAndroid
 				};
 			}
 			firstRow ??= row;
+			return row;
+		}
+
+		private LinearLayout.LayoutParams RowParams(int topMargin = 0) =>
+			new(-1, ViewGroup.LayoutParams.WrapContent) { TopMargin = Dp(2 + topMargin), BottomMargin = Dp(2) };
+
+		private TextView Section(string text)
+		{
+			var view = Text(text.ToUpperInvariant(), 12, Color.Argb(190, 242, 184, 216), TypefaceStyle.Bold);
+			view.LetterSpacing = 0.12f;
+			return view;
+		}
+
+		/// <summary>A row that runs an action instead of changing a value.</summary>
+		private View ActionRow(string label, string name, Action action)
+		{
+			var row = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			row.SetGravity(GravityFlags.CenterVertical);
+			row.SetPadding(Dp(16), Dp(9), Dp(16), Dp(9));
+			row.SetMinimumHeight(Dp(44));
+			row.Background = FocusBackground();
+			MakeFocusable(row, name);
+			row.AddView(Text(label, 17, Accent, TypefaceStyle.Normal), new LinearLayout.LayoutParams(0, -2, 1f));
+			row.Click += (_, _) => action();
 			return row;
 		}
 
