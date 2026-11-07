@@ -53,6 +53,7 @@ namespace CelesteAndroid.Steam
 		private bool disposed;
 
 		public bool IsLoggedOn { get; private set; }
+		public bool IsConnected { get; private set; }
 
 		private sealed class DiagnosticListener : IDebugListener
 		{
@@ -82,7 +83,7 @@ namespace CelesteAndroid.Steam
 			user = client.GetHandler<SteamUser>()!;
 			apps = client.GetHandler<SteamApps>()!;
 			content = client.GetHandler<SteamContent>()!;
-			callbacks.Subscribe<SteamClient.ConnectedCallback>(_ => connected.TrySetResult(true));
+			callbacks.Subscribe<SteamClient.ConnectedCallback>(_ => { IsConnected = true; connected.TrySetResult(true); });
 			callbacks.Subscribe<SteamClient.DisconnectedCallback>(OnDisconnected);
 			callbacks.Subscribe<SteamUser.LoggedOnCallback>(c => loggedOn.TrySetResult(c));
 			callbacks.Subscribe<SteamApps.LicenseListCallback>(c => { licenses = c; licenseList.TrySetResult(c); });
@@ -91,6 +92,7 @@ namespace CelesteAndroid.Steam
 		private void OnDisconnected(SteamClient.DisconnectedCallback cb)
 		{
 			IsLoggedOn = false;
+			IsConnected = false;
 			log($"steam: disconnected (user initiated: {cb.UserInitiated})");
 			if (cb.UserInitiated)
 				return; // um Disconnect() nosso (troca de servidor) não derruba a tentativa seguinte

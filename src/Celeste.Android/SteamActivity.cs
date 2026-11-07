@@ -247,6 +247,14 @@ namespace CelesteAndroid
 				(string user, string pass) = await submitted.ConfigureAwait(false);
 				try
 				{
+					// O formulário pode ter ficado parado por minutos e a Steam fecha conexões ociosas: reconecta antes de enviar.
+					if (!session!.IsConnected)
+					{
+						LogLine("steam: connection was closed while the form was open, reconnecting");
+						session.Dispose();
+						session = new SteamSession(LogLine);
+						await session.ConnectAsync(ct).ConfigureAwait(false);
+					}
 					RunOnUiThread(() => { signInButton.Enabled = false; status.Text = "Signing in…"; });
 					return await session!.LoginWithCredentialsAsync(user, pass, this, ct).ConfigureAwait(false);
 				}
