@@ -11,13 +11,14 @@ using Android.Util;
 using Android.Views;
 using Android.Views.Animations;
 using Android.Widget;
+using CelesteAndroid.Steam;
 using Color = Android.Graphics.Color;
 using Uri = Android.Net.Uri;
 
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Home screen: the game's key art, game file import and the play button.
+	/// Home screen: the game's key art, the main button (Set up / Installing… / Play), Config, and the install progress.
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.LauncherActivity",
@@ -42,15 +43,19 @@ namespace CelesteAndroid
 		private LinearLayout panel = null!;
 		private TextView status = null!;
 		private TextView play = null!;
-		private TextView steamButton = null!;
+		/// <summary>The big button while the game is not playable: "Set up", and "Installing…" while an install runs.</summary>
+		private TextView setupButton = null!;
 		private TextView configButton = null!;
-		private TextView importFolder = null!;
-		private LinearLayout importRow = null!;
 		private LinearLayout progressBox = null!;
 		private ProgressBar progressBar = null!;
-		private TextView progressText = null!;
+		private TextView statsText = null!;
+		private FrameLayout rootLayout = null!;
+		private UiDialog? dialog;
 		private bool busy;
-
+		private bool lastInstallWasUpdate;
+		private bool? lastInstalled;
+		private View? lastPrimary;
+		private InstallStatus? handledFailure, handledSignIn;
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
@@ -78,12 +83,10 @@ namespace CelesteAndroid
 
 			MaybeAutoplay(savedInstanceState);
 
-			// An install that was interrupted (process killed, reboot) resumes by itself; one that is running opens its screen.
-			if (InstallCoordinator.IsActive)
-				StartSteam();
-			else if (InstallCoordinator.PendingMode(this) is string pending && SteamTokenStore.HasSession(this))
+			// An install that was interrupted (process killed, reboot) resumes by itself; the main screen shows its progress.
+			if (!InstallCoordinator.IsActive && InstallCoordinator.PendingMode(this) is string pending && SteamTokenStore.HasSession(this))
 			{
-				try { InstallService.Start(this, pending == "update"); StartSteam(); }
+				try { InstallService.Start(this, pending == "update"); }
 				catch (Exception e) { Log.Warn(LogTag, "could not resume the install now: " + e.Message); }
 			}
 		}
@@ -109,11 +112,7 @@ namespace CelesteAndroid
 		protected override void OnStart()
 		{
 			base.OnStart();
-			statusHandler = s => RunOnUiThread(() =>
-			{
-				RefreshState();
-				if (s.Stage == InstallStage.Done) { LoadArt(); if (play.Enabled) play.RequestFocus(); }
-			});
+			statusHandler = s => RunOnUiThread(() => OnInstallStatus(s));
 			InstallCoordinator.Changed += statusHandler;
 		}
 
@@ -121,6 +120,30 @@ namespace CelesteAndroid
 		{
 			InstallCoordinator.Changed -= statusHandler;
 			base.OnStop();
+		}
+
+		/// <summary>Follows the install service: the main screen redraws itself; a finished install focuses Play; problems get a dialog.</summary>
+		private void OnInstallStatus(InstallStatus s)
+		{
+			RefreshState();
+			switch (s.Stage)
+			{
+				case InstallStage.Done:
+					LoadArt();
+					if (s.Title == InstallCoordinator.UpToDateTitle)
+						ShowMessage("Celeste is up to date", s.Step);
+					break;
+				case InstallStage.Failed when !ReferenceEquals(s, handledFailure):
+					handledFailure = s;
+					ShowDialog("Couldn't install from Steam", s.Step,
+						new UiDialog.Button("Try again", Filled: true, () => BeginSteam(lastInstallWasUpdate), "Retry"),
+						new UiDialog.Button("OK", Filled: false, Name: "DialogOk"));
+					break;
+				case InstallStage.NeedsSignIn when !ReferenceEquals(s, handledSignIn):
+					handledSignIn = s; // the stored session was rejected: ask for a new sign-in, then continue by itself
+					BeginSteam(lastInstallWasUpdate);
+					break;
+			}
 		}
 
 		protected override void OnResume()
@@ -155,18 +178,23 @@ namespace CelesteAndroid
 				int colon = debugSaves.IndexOf(':');
 				Uri debugUri = Uri.FromFile(new Java.IO.File(debugSaves[(colon + 1)..]))!;
 				if (debugSaves[..colon] == "export_zip")
-					RunJob(installer => $"✓  Exported {installer.ExportSavesToZip(debugUri)} save file(s)");
+					RunJob(installer => $"Exported {installer.ExportSavesToZip(debugUri)} save file(s)");
 			}
-			// Development (adb shell am start ... --ez steam true [--ez forceLogin true | --ez showError true]): opens the Steam install.
+			// Development (adb shell am start ... --ez steam true [--ez forceLogin true | --ez showError true]): the Steam flow of "Set up > Steam".
 			if (!busy && Intent!.GetBooleanExtra("steam", false))
 			{
 				bool force = Intent.GetBooleanExtra(SteamActivity.ExtraForceLogin, false);
 				bool showError = Intent.GetBooleanExtra(SteamActivity.ExtraShowError, false);
 				Intent.RemoveExtra("steam");
-				var steamIntent = new Intent(this, typeof(SteamActivity));
-				if (force) steamIntent.PutExtra(SteamActivity.ExtraForceLogin, true);
-				if (showError) steamIntent.PutExtra(SteamActivity.ExtraShowError, true);
-				StartActivityForResult(steamIntent, RequestSteam);
+				if (force || showError)
+				{
+					var steamIntent = new Intent(this, typeof(SteamActivity));
+					if (force) steamIntent.PutExtra(SteamActivity.ExtraForceLogin, true);
+					if (showError) steamIntent.PutExtra(SteamActivity.ExtraShowError, true);
+					StartActivityForResult(steamIntent, RequestSteam);
+				}
+				else
+					BeginSteam(false);
 			}
 			// Personal APK: the game already ships inside the APK; installs itself on first launch.
 			else if (!busy && !GameInstaller.IsInstalled(this) && GameInstaller.HasEmbeddedGame(this))
@@ -209,15 +237,15 @@ namespace CelesteAndroid
 		protected override string Tag => LogTag;
 		protected override View? InitialFocus() =>
 			play.Visibility == ViewStates.Visible && play.Enabled ? play
-			: steamButton.Visibility == ViewStates.Visible && steamButton.Enabled ? steamButton
+			: setupButton.Visibility == ViewStates.Visible && setupButton.Enabled ? setupButton
 			: configButton;
 		protected override bool InputBlocked => busy;
 		protected override void OnBackButton()
 		{
-			if (confirmOverlay != null)
+			if (dialog is { IsOpen: true })
 			{
-				Log.Info(LogTag, "back: close confirmation");
-				DismissConfirm();
+				Log.Info(LogTag, "back: close dialog");
+				dialog.Dismiss();
 				return;
 			}
 			Log.Info(LogTag, "back: exit launcher");
@@ -273,40 +301,46 @@ namespace CelesteAndroid
 			subtitle.LetterSpacing = 0.06f;
 			panel.AddView(subtitle, Margins(top: -4));
 
+			// The status line: always exactly one line (so the layout never moves while the text changes); text that is too long is
+			// shortened in the middle by SetStatus (InstallText.FitMiddle), and the TextView itself also ellipsizes in the middle as a safety net.
 			status = Text("", 14, Color.Argb(220, 255, 255, 255), TypefaceStyle.Normal);
-			panel.AddView(status, Margins(top: 10));
+			status.SetSingleLine(true);
+			status.SetLines(1);
+			status.SetMaxLines(1);
+			status.Ellipsize = Android.Text.TextUtils.TruncateAt.Middle;
+			panel.AddView(status, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(10) });
 
 			play = PillButton("PLAY", filled: true);
 			play.Click += (_, _) => Play();
 			MakeFocusable(play, "Play");
 			panel.AddView(play, UiKit.ButtonParams(this, 260, marginTop: 14));
 
-			// Game not installed: a large "Install from Steam" (focused), smaller "Import folder" / "Import .zip", and Config.
-			steamButton = PillButton("Install from Steam", filled: true);
-			steamButton.Click += (_, _) => StartSteam();
-			MakeFocusable(steamButton, "InstallFromSteam");
-			panel.AddView(steamButton, UiKit.ButtonParams(this, 260, marginTop: 14));
-
-			importRow = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Horizontal });
-			importFolder = PillButton("Import folder", filled: false, small: true);
-			importFolder.Click += (_, _) => PickFolder();
-			MakeFocusable(importFolder, "ImportFolder");
-			importRow.AddView(importFolder, UiKit.ButtonParams(this, 126, marginTop: 6));
-			panel.AddView(importRow);
+			// Not playable: one large "Set up" button (focused); it reads "Installing…" while an install runs.
+			setupButton = PillButton("Set up", filled: true);
+			setupButton.Click += (_, _) => OnSetupPressed();
+			MakeFocusable(setupButton, "Setup");
+			panel.AddView(setupButton, UiKit.ButtonParams(this, 260, marginTop: 14));
 
 			configButton = PillButton("Config", filled: false, small: true);
 			configButton.Click += (_, _) => StartActivityForResult(new Intent(this, typeof(ConfigActivity)), RequestConfig);
 			MakeFocusable(configButton, "Config");
 			panel.AddView(configButton, UiKit.ButtonParams(this, 126, marginTop: 6));
 
-			progressBox = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
+			// Install progress at the bottom of the screen: the bar, and under it one stats line. Both have fixed heights (the line is
+			// exactly one line, never wraps and is never cut at the end), so nothing moves while the numbers change.
+			progressBox = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone });
 			progressBar = new ProgressBar(this, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Max = 1000 };
 			progressBar.ProgressTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
 			progressBar.IndeterminateTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
-			progressText = Text("", 13, Color.Argb(210, 255, 255, 255), TypefaceStyle.Normal);
-			progressBox.AddView(progressBar, new LinearLayout.LayoutParams(Dp(260), Dp(8)));
-			progressBox.AddView(progressText, Margins(top: 6));
-			panel.AddView(progressBox, Margins(top: 12));
+			statsText = Text("", 13, Color.Argb(210, 255, 255, 255), TypefaceStyle.Normal);
+			statsText.SetSingleLine(true);
+			statsText.SetLines(1);
+			statsText.SetMaxLines(1);
+			statsText.Ellipsize = Android.Text.TextUtils.TruncateAt.Middle;
+			progressBox.AddView(progressBar, new LinearLayout.LayoutParams(-1, Dp(8)));
+			progressBox.AddView(statsText, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(6) });
+			root.AddView(progressBox, new FrameLayout.LayoutParams(Dp(420), ViewGroup.LayoutParams.WrapContent, GravityFlags.Bottom | GravityFlags.Start)
+				{ LeftMargin = Dp(56), BottomMargin = Dp(24) });
 
 			return root;
 		}
@@ -370,43 +404,121 @@ namespace CelesteAndroid
 		private void RefreshState()
 		{
 			bool installed = GameInstaller.IsInstalled(this);
-			bool installing = InstallCoordinator.IsActive;
-			// Installed: only Play (large, focused) and Config. Not installed: Install from Steam (large), Import folder / .zip, Config.
-			play.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
-			play.Enabled = installed && !busy;
-			steamButton.Visibility = installed && !installing ? ViewStates.Gone : ViewStates.Visible;
-			steamButton.Enabled = !busy;
-			importRow.Visibility = installed || busy || installing ? ViewStates.Gone : ViewStates.Visible;
-			importFolder.Enabled = !busy;
+			bool installing = InstallCoordinator.IsActive || busy;
+			InstallStatus live = InstallCoordinator.Current;
+			if (lastInstalled != installed) { lastInstalled = installed; LoadArt(); }
+
+			// Playable: Play (large, focused) and Config. Otherwise: Set up (large, focused) - "Installing…" while an install runs - and Config.
+			bool showPlay = installed && !installing;
+			play.Visibility = showPlay ? ViewStates.Visible : ViewStates.Gone;
+			play.Enabled = showPlay;
+			setupButton.Visibility = showPlay ? ViewStates.Gone : ViewStates.Visible;
+			setupButton.Text = installing ? "Installing…" : "Set up";
+			setupButton.Enabled = !busy;
 			configButton.Enabled = !busy;
-			steamButton.Text = installing ? "Installing… (view progress)" : "Install from Steam";
-			if (installing)
+
+			// Status line under the subtitle, progress bar and stats line at the bottom: only while installing.
+			progressBox.Visibility = installing ? ViewStates.Visible : ViewStates.Gone;
+			if (InstallCoordinator.IsActive)
 			{
-				InstallStatus live = InstallCoordinator.Current;
-				status.Text = live.Step;
-				progressBox.Visibility = ViewStates.Visible;
-				progressText.Text = live.Detail;
+				SetStatus(live.Step);
 				progressBar.Indeterminate = live.Fraction < 0;
 				if (live.Fraction >= 0) progressBar.Progress = (int)(live.Fraction * 1000);
+				statsText.Text = live.Stats is { } stats ? InstallText.FormatStats(stats) : "";
 			}
 			else if (!busy)
 			{
 				bool paused = File.Exists(SteamTokenStore.ResumeStatePath(this));
-				// No "Ready to play" label: the Play button says it. The line is only for messages and for the not-installed hint.
-				if (installed) { if (statusIsHint) status.Text = ""; }
-				else
-				{
-					statusIsHint = true;
-					status.Text = paused
-						? "Download paused: choose Install from Steam to resume."
-						: "Install Celeste from your Steam account, or import the folder of your PC copy.";
-				}
+				// Nothing above Play (its label says it all); a hint only while the game is not installed.
+				SetStatus(installed ? "" : paused ? "Download paused — choose Set up to resume." : "Set up the game to start playing.");
+				statsText.Text = "";
 			}
-			EnsureFocus();
+
+			// When the main button changes (Set up → Installing… → Play), focus follows it, as long as no dialog is open.
+			View primary = showPlay ? play : setupButton;
+			if (dialog is not { IsOpen: true } && !ReferenceEquals(primary, lastPrimary) && primary.Enabled)
+				primary.RequestFocus();
+			lastPrimary = primary;
+			if (dialog is not { IsOpen: true }) EnsureFocus();
 		}
 
-		/// <summary>True while the status line only shows the not-installed hint (so it can be cleared once the game is installed).</summary>
-		private bool statusIsHint;
+		/// <summary>
+		/// Sets the status line: one line only. A long path is shortened in the middle with an ellipsis to fit the line's width
+		/// ("Downloading Content/Ma…ity.bin"), never wrapped and never cut at the end.
+		/// </summary>
+		private void SetStatus(string text)
+		{
+			int available = status.Width > 0 ? status.Width - status.PaddingLeft - status.PaddingRight : Dp(380);
+			int keep = text.StartsWith("Downloading ", StringComparison.Ordinal) ? "Downloading ".Length
+				: text.StartsWith("Verifying ", StringComparison.Ordinal) ? "Verifying ".Length : 0;
+			string fitted = InstallText.FitMiddle(text, status.Paint!.MeasureText, available, keep);
+			if (status.Text != fitted) status.Text = fitted;
+		}
+
+		/// <summary>The big button: "Set up" opens the chooser; "Installing…" offers to cancel.</summary>
+		private void OnSetupPressed()
+		{
+			if (InstallCoordinator.IsActive)
+			{
+				ShowDialog("Cancel the installation?", "The download stops. What was already downloaded is kept and continues next time.",
+					new UiDialog.Button("Keep installing", Filled: false, Name: "KeepInstalling"),
+					new UiDialog.Button("Cancel install", Filled: true, () => InstallService.CancelInstall(this), "CancelInstall"));
+				return;
+			}
+			ShowDialog("Set up Celeste", "Where should the game come from?",
+				new UiDialog.Button("Steam", Filled: true, () => BeginSteam(false), "SetupSteam"),
+				new UiDialog.Button("Import from folder", Filled: false, PickFolder, "SetupImportFolder"));
+		}
+
+		private void ShowDialog(string title, string message, params UiDialog.Button[] buttons)
+		{
+			if (dialog is { IsOpen: true }) return;
+			Log.Info("CelesteAndroid", "[CelesteAndroid] launcher dialog: " + title);
+			dialog = UiDialog.Show(this, rootLayout, panel, title, message, buttons, 0, returnFocus: null, fallbackFocus: InitialFocus());
+		}
+
+		private void ShowMessage(string title, string message) =>
+			ShowDialog(title, message, new UiDialog.Button("OK", Filled: true, Name: "DialogOk"));
+
+		/// <summary>
+		/// Steam setup. Signed in: the account is shown and the download starts at once. Signed out: the sign-in screen opens and, after a
+		/// successful login, the install starts by itself (its first steps check that the account owns Celeste) with no further taps.
+		/// </summary>
+		private void BeginSteam(bool update)
+		{
+			lastInstallWasUpdate = update;
+			if (SteamTokenStore.HasSession(this))
+			{
+				string account = SteamAccount.Name(this) ?? "Steam";
+				Log.Info("CelesteAndroid", "[CelesteAndroid] launcher: signed in to Steam, starting the " + (update ? "update check" : "download"));
+				StartInstallService(update, "Signed in as " + account);
+			}
+			else
+			{
+				Log.Info("CelesteAndroid", "[CelesteAndroid] launcher: not signed in to Steam, opening the sign-in");
+				StartActivityForResult(new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraUpdate, update), RequestSteam);
+			}
+		}
+
+		private void StartInstallService(bool update, string firstStep)
+		{
+			lastInstallWasUpdate = update;
+			// Android 13+: without the permission the service still runs, but its progress notification is hidden.
+			if (OperatingSystem.IsAndroidVersionAtLeast(33) && CheckSelfPermission("android.permission.POST_NOTIFICATIONS") != Permission.Granted)
+				RequestPermissions(new[] { "android.permission.POST_NOTIFICATIONS" }, 7);
+			try
+			{
+				// Shown at once; the service replaces it with its own first step.
+				InstallCoordinator.Publish(new InstallStatus(InstallStage.Running, update ? "Updating Celeste" : "Installing Celeste", firstStep));
+				InstallService.Start(this, update);
+			}
+			catch (Exception e)
+			{
+				Log.Error(LogTag, "could not start the install service: " + e.Message);
+				InstallCoordinator.Publish(InstallStatus.None);
+				ShowMessage("Couldn't start the download", e.Message);
+			}
+		}
 
 		private void Play()
 		{
@@ -419,71 +531,6 @@ namespace CelesteAndroid
 
 		/// <summary>Installs (or updates) the game from Steam; the download resumes where it stopped.</summary>
 		private void StartSteam() => StartActivityForResult(new Intent(this, typeof(SteamActivity)), RequestSteam);
-
-		private FrameLayout rootLayout = null!;
-		private View? confirmOverlay;
-		private View? focusBeforeConfirm;
-
-		private void ConfirmDeleteGame() =>
-			ShowConfirm("Delete game files?",
-				"This frees the space used by the game (about 1.2 GB). Your saves and settings are kept; you can install again from Steam or import the game.",
-				"Delete", () => RunJob(installer =>
-				{
-					long freed = installer.DeleteGame();
-					RunOnUiThread(LoadArt);
-					return $"✓  Game files deleted ({freed / (1024 * 1024)} MB freed)";
-				}));
-
-		/// <summary>Confirmation in the launcher's own look: visible focus, Cancel focused first, A confirms and B cancels.</summary>
-		private void ShowConfirm(string title, string message, string confirmText, Action onConfirm)
-		{
-			if (confirmOverlay != null) return;
-			focusBeforeConfirm = CurrentFocus;
-			panel.DescendantFocusability = DescendantFocusability.BlockDescendants;
-
-			var overlay = new FrameLayout(this) { Clickable = true };
-			overlay.SetBackgroundColor(Color.Argb(205, 8, 5, 18));
-			var card = new LinearLayout(this) { Orientation = Orientation.Vertical };
-			var cardShape = new GradientDrawable();
-			cardShape.SetCornerRadius(Dp(22));
-			cardShape.SetColor(Color.ParseColor("#1F1636"));
-			cardShape.SetStroke(Dp(1.5f), Color.Argb(120, 242, 184, 216));
-			card.Background = cardShape;
-			card.SetPadding(Dp(26), Dp(22), Dp(26), Dp(20));
-			card.AddView(Text(title, 22, Color.White, TypefaceStyle.Bold));
-			var body = Text(message, 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
-			var bodyScroll = new ScrollView(this) { VerticalScrollBarEnabled = false };
-			bodyScroll.AddView(body);
-			card.AddView(bodyScroll, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(8) });
-
-			var buttons = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-			buttons.SetGravity(GravityFlags.End);
-			TextView cancel = PillButton("Cancel", filled: false);
-			MakeFocusable(cancel, "ConfirmCancel");
-			cancel.Click += (_, _) => DismissConfirm();
-			TextView confirm = PillButton(confirmText, filled: true);
-			MakeFocusable(confirm, "ConfirmYes");
-			confirm.Click += (_, _) => { DismissConfirm(); onConfirm(); };
-			buttons.AddView(cancel, UiKit.ButtonParams(this, 140, marginTop: 4, marginSide: 6));
-			buttons.AddView(confirm, UiKit.ButtonParams(this, 140, marginTop: 4, marginSide: 6));
-			card.AddView(buttons, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(14) });
-
-			UiKit.NoClip(card); UiKit.NoClip(buttons);
-			card.SetPadding(Dp(26), Dp(22), Dp(26), Dp(22));
-			overlay.AddView(card, new FrameLayout.LayoutParams(Dp(520), ViewGroup.LayoutParams.WrapContent, GravityFlags.Center) { TopMargin = Dp(16), BottomMargin = Dp(16) });
-			rootLayout.AddView(overlay, Match());
-			confirmOverlay = overlay;
-			cancel.RequestFocus();
-		}
-
-		private void DismissConfirm()
-		{
-			if (confirmOverlay == null) return;
-			rootLayout.RemoveView(confirmOverlay);
-			confirmOverlay = null;
-			panel.DescendantFocusability = DescendantFocusability.AfterDescendants;
-			(focusBeforeConfirm ?? play).RequestFocus();
-		}
 
 		private void PickFolder()
 		{
@@ -500,10 +547,10 @@ namespace CelesteAndroid
 			}
 			if (requestCode == RequestSteam)
 			{
-				LoadArt();
+				// Signed in: start the install now (no extra taps). Cancelled: back to the main screen as it was.
+				if (resultCode == Result.Ok)
+					StartInstallService(data?.GetBooleanExtra(SteamActivity.ExtraUpdate, false) ?? false, "Signed in to Steam");
 				RefreshState();
-				if (resultCode == Result.Ok && play.Enabled)
-					play.RequestFocus(); // "Done" returns to the main screen with Play focused
 				return;
 			}
 			Uri? uri = data?.Data;
@@ -513,29 +560,21 @@ namespace CelesteAndroid
 				RunInstall(installer => installer.ImportFolder(uri));
 		}
 
-		/// <summary>Config hands back what needs the launcher's progress UI (imports, exports, delete).</summary>
+		/// <summary>Config hands back what needs the main screen's progress (re-import, update check).</summary>
 		private void HandleConfigResult(Result resultCode, Intent? data)
 		{
+			LoadArt(); // the game files may have been deleted in Config
 			RefreshState();
 			string? action = data?.GetStringExtra(ConfigActivity.ExtraAction);
 			Uri? uri = data?.Data;
 			if (resultCode != Result.Ok || action == null) return;
 			switch (action)
 			{
-				case ConfigActivity.ActionDelete:
-					ConfirmDeleteGame();
-					break;
-				case ConfigActivity.ActionImportSavesFolder when uri != null:
-					RunJob(installer => $"✓  Imported {installer.ImportSavesFromFolder(uri)} save file(s); the previous saves were backed up");
-					break;
-				case ConfigActivity.ActionExportSavesFolder when uri != null:
-					RunJob(installer => $"✓  Exported {installer.ExportSavesToFolder(uri)} save file(s)");
-					break;
-				case ConfigActivity.ActionExportSavesZip when uri != null:
-					RunJob(installer => $"✓  Exported {installer.ExportSavesToZip(uri)} save file(s)");
-					break;
 				case ConfigActivity.ActionReimportFolder when uri != null:
 					RunInstall(installer => installer.ImportFolder(uri));
+					break;
+				case ConfigActivity.ActionCheckUpdates:
+					BeginSteam(update: true);
 					break;
 			}
 		}
@@ -549,20 +588,21 @@ namespace CelesteAndroid
 				installer.Patch();
 				installer.PrepareBackground();
 				RunOnUiThread(LoadArt);
-				return "✓  Game imported! Ready to play";
+				return "Game imported; ready to play";
 			});
 		}
 
-		/// <summary>Runs an installer task off the UI thread, with progress; returns the success message.</summary>
+		/// <summary>Runs an installer task off the UI thread, with progress on the main screen. A failure gets a dialog; success needs no text.</summary>
 		private void RunJob(Func<GameInstaller, string> job)
 		{
 			busy = true;
-			progressBox.Visibility = ViewStates.Visible;
 			RefreshState();
+			progressBar.Indeterminate = true;
+			statsText.Text = "";
 
 			var installer = new GameInstaller(this, (message, fraction) => RunOnUiThread(() =>
 			{
-				progressText.Text = message;
+				SetStatus(message);
 				progressBar.Indeterminate = fraction < 0;
 				if (fraction >= 0)
 					progressBar.Progress = (int)(fraction * 1000);
@@ -589,10 +629,9 @@ namespace CelesteAndroid
 				RunOnUiThread(() =>
 				{
 					busy = false;
-					progressBox.Visibility = ViewStates.Gone;
+					if (success != null) Log.Info("CelesteAndroid", "[CelesteAndroid] launcher job done: " + success);
 					RefreshState();
-					statusIsHint = false;
-					status.Text = error ?? success;
+					if (error != null) ShowMessage("Couldn't finish", error);
 				});
 			}) { Name = "CelesteInstall", IsBackground = true }.Start();
 		}

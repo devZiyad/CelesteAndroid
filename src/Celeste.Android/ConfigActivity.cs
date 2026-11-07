@@ -16,7 +16,8 @@ namespace CelesteAndroid
 	/// <summary>
 	/// Config: Port settings (renderer, frame cap, autoplay...), Saves (import/export), Game files (check for updates, re-import, delete)
 	/// and the Steam account (name, Sign out, Switch account). These are launcher-only: the in-game PORT section has only the port settings.
-	/// Anything that needs the launcher's progress UI (imports, exports, delete) is handed back to it as a result.
+	/// Saves import/export and Delete game files run here and report through dialogs; closing a dialog puts focus back on the row that
+	/// opened it. Only what needs the launcher's progress UI (re-import, update check) is handed back to it as a result.
 	/// Controller: up/down pick the row, left/right (or A) change the value, B goes back.
 	/// </summary>
 	[Activity(
@@ -32,10 +33,9 @@ namespace CelesteAndroid
 
 		/// <summary>Result extras: what the launcher should do (<see cref="ExtraAction"/>) and with which picked file or folder (the intent data).</summary>
 		public const string ExtraAction = "action";
-		public const string ActionImportSavesFolder = "import_saves_folder",
-			ActionExportSavesFolder = "export_saves_folder", ActionExportSavesZip = "export_saves_zip",
-			ActionReimportFolder = "reimport_folder", ActionDelete = "delete";
+		public const string ActionReimportFolder = "reimport_folder", ActionCheckUpdates = "check_updates";
 
+		private const int ReqSignIn = 20;
 		private const int ReqImportSavesFolder = 11, ReqExportSavesFolder = 13, ReqExportSavesZip = 14, ReqReimportFolder = 15;
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
@@ -43,10 +43,20 @@ namespace CelesteAndroid
 		private readonly Dictionary<View, (PortSetting Setting, TextView Value)> rows = new();
 		private View? firstRow;
 		private TextView message = null!, accountText = null!;
-		private View signOutRow = null!, switchRow = null!, deleteRow = null!, reimportFolderRow = null!;
+		private View signOutRow = null!, switchRow = null!, deleteRow = null!, reimportFolderRow = null!, checkUpdatesRow = null!;
+		private FrameLayout rootFrame = null!;
+		private LinearLayout column = null!;
+		private UiDialog? dialog;
+		private bool working;
 
 		protected override string Tag => LogTag;
 		protected override View? InitialFocus() => firstRow;
+		protected override bool InputBlocked => working;
+		protected override void OnBackButton()
+		{
+			if (dialog is { IsOpen: true }) { Log.Info(LogTag, "back: close dialog"); dialog.Dismiss(); return; }
+			base.OnBackButton();
+		}
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
@@ -70,20 +80,88 @@ namespace CelesteAndroid
 		{
 			base.OnActivityResult(requestCode, resultCode, data);
 			Android.Net.Uri? uri = data?.Data;
-			if (resultCode != Result.Ok || uri == null) return;
-			string? action = requestCode switch
+			if (requestCode == ReqSignIn)
 			{
-				ReqImportSavesFolder => ActionImportSavesFolder,
-				ReqExportSavesFolder => ActionExportSavesFolder,
-				ReqExportSavesZip => ActionExportSavesZip,
-				ReqReimportFolder => ActionReimportFolder,
-				_ => null,
-			};
-			if (action != null)
-				Hand(action, uri);
+				RefreshAccount();
+				message.Text = SteamAccount.Name(this) is string name ? "Signed in as " + name : "";
+				return;
+			}
+			if (resultCode != Result.Ok || uri == null) return;
+			switch (requestCode)
+			{
+				case ReqImportSavesFolder:
+					RunJob("Saves imported", installer => $"Imported {installer.ImportSavesFromFolder(uri)} save file(s). The previous saves were backed up first.");
+					break;
+				case ReqExportSavesFolder:
+					RunJob("Saves exported", installer => $"Exported {installer.ExportSavesToFolder(uri)} save file(s).");
+					break;
+				case ReqExportSavesZip:
+					RunJob("Saves exported", installer => $"Exported {installer.ExportSavesToZip(uri)} save file(s).");
+					break;
+				case ReqReimportFolder:
+					Hand(ActionReimportFolder, uri);
+					break;
+			}
 		}
 
-		/// <summary>Hands the work to the launcher (it owns the progress UI) and closes Config.</summary>
+		/// <summary>Runs an installer task off the UI thread (input blocked), then reports its outcome in a dialog; failures too.</summary>
+		private void RunJob(string successTitle, Func<GameInstaller, string> job, View? returnFocus = null, View? fallbackFocus = null)
+		{
+			returnFocus ??= CurrentFocus;
+			working = true;
+			var installer = new GameInstaller(this, (text, _) => RunOnUiThread(() => message.Text = text));
+			new System.Threading.Thread(() =>
+			{
+				string title = successTitle, body;
+				try
+				{
+					body = job(installer);
+				}
+				catch (InstallException e)
+				{
+					title = "Couldn't finish"; body = e.Message;
+				}
+				catch (Exception e)
+				{
+					Log.Error(LogTag, e.ToString());
+					title = "Couldn't finish"; body = "Something went wrong: " + e.Message;
+				}
+				RunOnUiThread(() =>
+				{
+					working = false;
+					message.Text = "";
+					RefreshAccount();
+					if (title.Length == 0) ShowInfo(body, "", returnFocus, fallbackFocus); // the outcome itself is the dialog's title
+					else ShowInfo(title, body, returnFocus, fallbackFocus);
+				});
+			}) { Name = "CelesteConfigJob", IsBackground = true }.Start();
+		}
+
+		/// <summary>A dialog with one OK button; closing it returns to this section with focus on the row that opened it.</summary>
+		private void ShowInfo(string title, string body, View? returnFocus, View? fallbackFocus)
+		{
+			Log.Info("CelesteAndroid", "[CelesteAndroid] config dialog: " + title);
+			dialog = UiDialog.Show(this, rootFrame, column, title, body,
+				new[] { new UiDialog.Button("OK", Filled: true, Name: "DialogOk") }, 0, returnFocus, fallbackFocus);
+		}
+
+		private void ConfirmDelete()
+		{
+			View? origin = CurrentFocus;
+			dialog = UiDialog.Show(this, rootFrame, column, "Delete game files?",
+				"This frees the space used by the game (about 1.2 GB). Your saves and settings are kept; you can install again from Steam or import the game.",
+				new[]
+				{
+					new UiDialog.Button("Cancel", Filled: false, Name: "ConfirmCancel"),
+					new UiDialog.Button("Delete", Filled: true, () => RunJob("", installer =>
+					{
+						long freed = installer.DeleteGame();
+						return $"Game files deleted — {freed / (1024 * 1024)} MB freed";
+					}, origin, checkUpdatesRow), Name: "ConfirmYes"),
+				}, 0, origin, checkUpdatesRow);
+		}
+
+		/// <summary>Hands the work to the launcher (it owns the main-screen progress) and closes Config.</summary>
 		private void Hand(string action, Android.Net.Uri? uri = null)
 		{
 			var result = new Intent().PutExtra(ExtraAction, action);
@@ -106,8 +184,9 @@ namespace CelesteAndroid
 		private void RefreshAccount()
 		{
 			bool installed = GameInstaller.IsInstalled(this);
-			deleteRow.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
-			reimportFolderRow.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
+			bool idle = installed && !InstallCoordinator.IsActive; // never delete or replace the files under a running install
+			deleteRow.Visibility = idle ? ViewStates.Visible : ViewStates.Gone;
+			reimportFolderRow.Visibility = idle ? ViewStates.Visible : ViewStates.Gone;
 			string? name = SteamAccount.Name(this);
 			accountText.Text = name == null ? "Not signed in to Steam" : "Signed in as " + name;
 			signOutRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
@@ -130,7 +209,7 @@ namespace CelesteAndroid
 			if (thenSignInAgain)
 			{
 				message.Text = "";
-				StartActivity(new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraForceLogin, true).PutExtra(SteamActivity.ExtraUpdate, true));
+				StartActivityForResult(new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraForceLogin, true), ReqSignIn);
 			}
 			else
 			{
@@ -160,6 +239,7 @@ namespace CelesteAndroid
 		private View BuildLayout()
 		{
 			var root = new FrameLayout(this);
+			rootFrame = root;
 			root.SetBackgroundColor(Night);
 			root.AddView(new View(this)
 			{
@@ -169,7 +249,7 @@ namespace CelesteAndroid
 				}),
 			}, new FrameLayout.LayoutParams(-1, -1));
 
-			var column = new LinearLayout(this) { Orientation = Orientation.Vertical };
+			column = new LinearLayout(this) { Orientation = Orientation.Vertical };
 			column.SetPadding(Dp(72), Dp(16), Dp(72), Dp(8));
 			root.AddView(column, new FrameLayout.LayoutParams(-1, -1));
 
@@ -195,11 +275,11 @@ namespace CelesteAndroid
 			list.AddView(ActionRow("Export saves to a .zip", "ExportSavesZip", () => CreateZip(ReqExportSavesZip)), RowParams());
 
 			list.AddView(Section("Game files"), SectionParams());
-			list.AddView(ActionRow("Check for updates", "CheckForUpdates", () =>
-				StartActivity(new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraUpdate, true))), RowParams());
+			checkUpdatesRow = ActionRow("Check for updates", "CheckForUpdates", () => Hand(ActionCheckUpdates));
+			list.AddView(checkUpdatesRow, RowParams());
 			reimportFolderRow = ActionRow("Re-import from folder", "ReimportFolder", () => PickFolder(ReqReimportFolder));
 			list.AddView(reimportFolderRow, RowParams());
-			deleteRow = ActionRow("Delete game files", "DeleteGameFiles", () => Hand(ActionDelete));
+			deleteRow = ActionRow("Delete game files", "DeleteGameFiles", ConfirmDelete);
 			list.AddView(deleteRow, RowParams());
 
 			list.AddView(Section("Steam account"), SectionParams());

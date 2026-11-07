@@ -25,9 +25,9 @@ using Uri = Android.Net.Uri;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// The Steam install screen: sign-in (username/password with Steam Guard, or a QR code scanned from another device) and then the live
-	/// progress of the foreground <see cref="InstallService"/>, which does the download, the checks and the patching. Never logs or
-	/// stores the password; only the refresh token, encrypted in the Keystore.
+	/// The Steam sign-in screen (username/password with Steam Guard, or a QR code scanned from another device). It only signs in: on
+	/// success it stores the session and returns Result.Ok, and the launcher starts the install, whose progress lives on the main
+	/// screen. Never logs or stores the password; only the refresh token, encrypted in the Keystore.
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.SteamActivity",
@@ -41,7 +41,7 @@ namespace CelesteAndroid
 	{
 		private const string LogTag = "CelesteSteam";
 		private const string SteamPackage = "com.valvesoftware.android.steam.community";
-		/// <summary>"Check for updates": a no-op when the installed manifest is already the latest.</summary>
+		/// <summary>Echoed back in the result, so the launcher knows whether to start an install or an update check after the sign-in.</summary>
 		public const string ExtraUpdate = "update";
 		/// <summary>Debug (adb): ignores the stored session (without deleting it) to show the login screens.</summary>
 		public const string ExtraForceLogin = "forceLogin";
@@ -51,34 +51,27 @@ namespace CelesteAndroid
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
 
-		private enum Screen { Message, Qr, Credentials, Progress }
+		private enum Screen { Message, Qr, Credentials }
 
-		private TextView title = null!, status = null!, detail = null!;
-		private LinearLayout qrGroup = null!, credentialsGroup = null!, progressGroup = null!, actions = null!;
+		private TextView title = null!, status = null!;
+		private LinearLayout qrGroup = null!, credentialsGroup = null!, actions = null!;
 		private ImageView qrImage = null!;
-		private ProgressBar bar = null!;
 		private TextView signInButton = null!, openSteamCredentials = null!, submitCode = null!, cancelButton = null!, retryButton = null!;
 		private TextView backToCredentials = null!, useQr = null!, enterCode = null!;
 		private EditText userField = null!, passField = null!, codeField = null!;
 
 		private CancellationTokenSource cts = new();
 		private SteamSession? session;
-				private bool codeIsEmail;
+		private bool codeIsEmail;
 		private TaskCompletionSource<bool>? switchToCredentials, switchToQr;
 		private TaskCompletionSource<(string User, string Pass)>? credentialsSubmitted;
 		private View? firstFocus;
-		private bool finishing, installDone, updateMode;
+		private bool finishing, updateMode;
 		private Screen currentScreen = Screen.Message;
-		private Action<InstallStatus>? statusHandler;
 
 		protected override string Tag => LogTag;
 		protected override View? InitialFocus() => firstFocus ?? cancelButton;
-		protected override void OnBackButton()
-		{
-			// Leaving while the service works does not stop the download: it goes on in the background.
-			if (InstallCoordinator.IsActive || installDone) CancelAndClose(stopInstall: false);
-			else CancelAndClose(stopInstall: true);
-		}
+		protected override void OnBackButton() => CancelAndClose();
 
 		private void LogLine(string line) => Log.Info("CelesteAndroid", "[CelesteAndroid] " + line);
 
@@ -90,15 +83,11 @@ namespace CelesteAndroid
 			SetContentView(root);
 			WatchFocus(root);
 			HideSystemBars();
-			RequestNotificationPermission();
-			statusHandler = status => RunOnUiThread(() => OnInstallStatus(status));
-			InstallCoordinator.Changed += statusHandler;
 			Begin();
 		}
 
 		protected override void OnDestroy()
 		{
-			InstallCoordinator.Changed -= statusHandler;
 			cts.Cancel();
 			session?.Dispose();
 			base.OnDestroy();
@@ -106,7 +95,7 @@ namespace CelesteAndroid
 
 		#region Flow
 
-		/// <summary>Opens the screen on a progress that is already running, or starts one (sign-in first when there is no session).</summary>
+		/// <summary>Shows the sign-in (when there is no usable session or a login is forced); otherwise there is nothing to ask.</summary>
 		private void Begin()
 		{
 			if (Intent!.GetBooleanExtra(ExtraShowError, false))
@@ -114,30 +103,27 @@ namespace CelesteAndroid
 				_ = ShowErrorAsync("Disconnected from Steam. (debug preview of the error screen)");
 				return;
 			}
-			if (InstallCoordinator.IsActive)
-			{
-				OnInstallStatus(InstallCoordinator.Current); // reopened while the service works: show it live
-				return;
-			}
 			if (Intent.GetBooleanExtra(ExtraForceLogin, false) || !SteamTokenStore.HasSession(this))
-				_ = Task.Run(() => SignInThenInstallAsync(cts.Token));
+				_ = Task.Run(() => SignInThenReturnAsync(cts.Token));
 			else
-				StartInstall();
+				Complete();
 		}
 
-		private void StartInstall()
+		/// <summary>Signed in: hands control back to the launcher, which starts the install (ownership is checked as its first step).</summary>
+		private void Complete() => RunOnUiThread(() =>
 		{
-			SetScreen(Screen.Progress, updateMode ? "Updating Celeste" : "Installing Celeste", "Starting…");
-			bar.Indeterminate = true;
-			InstallService.Start(this, updateMode);
-		}
+			if (finishing) return;
+			finishing = true;
+			SetResult(Result.Ok, new Intent().PutExtra(ExtraUpdate, updateMode));
+			Finish();
+		});
 
-		/// <summary>Interactive part only: get a Steam session (and keep its token); the foreground service does the rest.</summary>
-		private async Task SignInThenInstallAsync(CancellationToken ct)
+		/// <summary>Get a Steam session and keep its token.</summary>
+		private async Task SignInThenReturnAsync(CancellationToken ct)
 		{
 			try
 			{
-				SetScreen(Screen.Message, "Install from Steam", "Connecting to Steam…");
+				SetScreen(Screen.Message, "Sign in to Steam", "Connecting to Steam…");
 				session = new SteamSession(LogLine);
 				await session.ConnectAsync(ct).ConfigureAwait(false);
 				SteamAuthResult auth = await SignInAsync(ct).ConfigureAwait(false);
@@ -145,7 +131,7 @@ namespace CelesteAndroid
 				LogLine("steam: login successful, session stored encrypted (Android Keystore)");
 				session.Dispose();
 				session = null;
-				RunOnUiThread(StartInstall);
+				Complete();
 			}
 			catch (OperationCanceledException)
 			{
@@ -156,55 +142,6 @@ namespace CelesteAndroid
 				LogLine("steam: sign-in failed: " + Describe(e));
 				await ShowErrorAsync(Describe(e)).ConfigureAwait(false);
 			}
-		}
-
-		/// <summary>Follows the service's state: step text, file counter and bytes while working; "Done" when finished.</summary>
-		private void OnInstallStatus(InstallStatus s)
-		{
-			switch (s.Stage)
-			{
-				case InstallStage.Running or InstallStage.Waiting:
-					if (currentScreen != Screen.Progress)
-						SetScreen(Screen.Progress, s.Title, s.Step);
-					title.Text = s.Title;
-					status.Text = s.Step;
-					detail.Text = s.Detail;
-					bar.Indeterminate = s.Fraction < 0;
-					if (s.Fraction >= 0) bar.Progress = (int)(s.Fraction * 1000);
-					cancelButton.Text = "Cancel";
-					break;
-				case InstallStage.Done:
-					installDone = true;
-					if (currentScreen != Screen.Progress)
-						SetScreen(Screen.Progress, s.Title, s.Step);
-					title.Text = s.Title;
-					status.Text = s.Step;
-					detail.Text = "";
-					bar.Indeterminate = false;
-					bar.Progress = 1000;
-					cancelButton.Text = "Done"; // Cancel turns into Done; it returns to the main screen with Play focused
-					cancelButton.RequestFocus();
-					break;
-				case InstallStage.Failed:
-					_ = ShowErrorAsync(s.Step);
-					break;
-				case InstallStage.NeedsSignIn:
-					if (session == null)
-					{
-						cts.Cancel();
-						cts = new CancellationTokenSource();
-						CancellationToken token = cts.Token;
-						_ = Task.Run(() => SignInThenInstallAsync(token));
-					}
-					break;
-			}
-		}
-
-		private void RequestNotificationPermission()
-		{
-			// Android 13+: without it the service still runs, but its progress notification is hidden.
-			if (OperatingSystem.IsAndroidVersionAtLeast(33) && CheckSelfPermission("android.permission.POST_NOTIFICATIONS") != Permission.Granted)
-				RequestPermissions(new[] { "android.permission.POST_NOTIFICATIONS" }, 7);
 		}
 
 		/// <summary>Never includes details that could hold secrets: only the exception's type and message.</summary>
@@ -316,27 +253,19 @@ namespace CelesteAndroid
 		{
 			RunOnUiThread(() =>
 			{
-				SetScreen(Screen.Message, "Couldn't install from Steam", message);
+				SetScreen(Screen.Message, "Couldn't sign in to Steam", message);
 				retryButton.Visibility = ViewStates.Visible;
 				retryButton.RequestFocus();
 			});
 			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		private void CancelAndClose(bool stopInstall = true)
+		private void CancelAndClose()
 		{
 			if (finishing) return;
 			finishing = true;
-			if (installDone)
-			{
-				SetResult(Result.Ok); // the launcher refreshes and focuses Play
-			}
-			else
-			{
-				if (stopInstall) InstallService.CancelInstall(this);
-				cts.Cancel();
-				SetResult(Result.Canceled);
-			}
+			cts.Cancel();
+			SetResult(Result.Canceled);
 			Finish();
 		}
 
@@ -437,19 +366,9 @@ namespace CelesteAndroid
 			credentialsGroup.AddView(useQr, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(6) });
 			column.AddView(credentialsGroup);
 
-			// Progresso
-			progressGroup = new LinearLayout(this) { Orientation = Orientation.Vertical };
-			bar = new ProgressBar(this, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Max = 1000 };
-			bar.ProgressTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
-			bar.IndeterminateTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
-			progressGroup.AddView(bar, new LinearLayout.LayoutParams(Dp(420), Dp(10)) { TopMargin = Dp(14) });
-			detail = Text("", 14, Color.Argb(210, 255, 255, 255), TypefaceStyle.Normal);
-			progressGroup.AddView(detail, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(8) });
-			column.AddView(progressGroup);
-
 			actions = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Horizontal });
 			cancelButton = Pill("Cancel", filled: false);
-			cancelButton.Click += (_, _) => CancelAndClose(stopInstall: true);
+			cancelButton.Click += (_, _) => CancelAndClose();
 			MakeFocusable(cancelButton, "Cancel");
 			actions.AddView(cancelButton, UiKit.ButtonParams(this, 150, marginTop: 14));
 			retryButton = Pill("Try again", filled: true);
@@ -476,7 +395,6 @@ namespace CelesteAndroid
 			qrGroup.Visibility = screen == Screen.Qr ? ViewStates.Visible : ViewStates.Gone;
 			qrImage.Visibility = screen == Screen.Qr ? ViewStates.Visible : ViewStates.Gone;
 			credentialsGroup.Visibility = screen == Screen.Credentials ? ViewStates.Visible : ViewStates.Gone;
-			progressGroup.Visibility = screen == Screen.Progress ? ViewStates.Visible : ViewStates.Gone;
 			retryButton.Visibility = ViewStates.Gone;
 			signInButton.Enabled = true;
 			firstFocus = screen switch
