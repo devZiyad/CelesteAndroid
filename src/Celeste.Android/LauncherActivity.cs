@@ -149,6 +149,18 @@ namespace CelesteAndroid
 					Play();
 				}
 			}
+			// Development (adb shell am start ... --es debugSaves "export_zip:/path/saves.zip" | "import_zip:/path/saves.zip"): runs the same
+			// saves export/import as the Config screen on a file path under the app's external files folder (no file picker needed).
+			if (!busy && Intent!.GetStringExtra("debugSaves") is string debugSaves && debugSaves.IndexOf(':') > 0)
+			{
+				Intent.RemoveExtra("debugSaves");
+				int colon = debugSaves.IndexOf(':');
+				Uri debugUri = Uri.FromFile(new Java.IO.File(debugSaves[(colon + 1)..]))!;
+				if (debugSaves[..colon] == "export_zip")
+					RunJob(installer => $"✓  Exported {installer.ExportSavesToZip(debugUri)} save file(s)");
+				else if (debugSaves[..colon] == "import_zip")
+					RunJob(installer => $"✓  Imported {installer.ImportSavesFromZip(debugUri)} save file(s); the previous saves were backed up");
+			}
 			// Development (adb shell am start ... --ez steam true [--ez forceLogin true | --ez showError true]): opens the Steam install.
 			if (!busy && Intent!.GetBooleanExtra("steam", false))
 			{
