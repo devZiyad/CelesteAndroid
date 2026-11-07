@@ -69,9 +69,9 @@ namespace CelesteAndroid
 				}
 				else
 				{
-					Log.Warn(LogTag, "Jogo não instalado; rodando HelloGame.");
-					using HelloGame game = new();
-					game.Run();
+					// O launcher só habilita "PLAY" com o jogo instalado.
+					Log.Warn(LogTag, "Jogo não instalado; fechando.");
+					RunOnUiThread(Finish);
 				}
 			}
 			catch (Exception e)
