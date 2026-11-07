@@ -31,7 +31,7 @@ Builds and runs entirely on Linux (CachyOS, fish shell). No Windows, no PowerShe
 See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
 
 ## Git workflow
-- Work on a branch named `stage-N` created from `main` (current stage: `stage-0`). `main` stays at `origin/main`.
+- Work on a branch named `stage-N` created from `main`. `main` stays at `origin/main`.
 - Small, focused commits, one per working change, each only after it builds and its check passes. Never commit a broken build.
 - Conventional, imperative commit messages (`feat:`, `fix:`, `docs:`, `build:`...) with a short "why" body when not obvious.
 - Never rewrite pushed history or force-push.
