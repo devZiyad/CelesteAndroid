@@ -95,6 +95,19 @@ namespace CelesteAndroid.Steam.Tests
 		}
 
 		[Fact]
+		public void Real_manifest_matches_what_the_phone_reported()
+		{
+			// Manifesto real do depot 504233 (ramo público, gravado no aparelho): mesmos números do logcat da instalação.
+			ManifestSnapshot m = Fixture.Load();
+			Assert.Equal(5880027853585448535UL, m.ManifestId);
+			SelectionResult r = FileSelection.Select(m);
+			Assert.Equal(1217, r.Needed.Count);
+			Assert.Equal(1161239007L, r.NeededBytes);
+			Assert.Equal(42, r.Skipped.Count);
+			Assert.Equal(40601319L, r.SkippedBytes);
+		}
+
+		[Fact]
 		public void Fna_build_validation_accepts_the_linux_depot()
 		{
 			FileSelection.ValidateIsFnaBuild(Fixture.Load());
