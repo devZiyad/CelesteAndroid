@@ -114,10 +114,44 @@ namespace Monocle
 				scene.Render();
 				scene.AfterRender();
 			}
+			if (usesSideArt)
+			{
+				// Algumas cenas (ex.: Level) limpam a tela inteira de preto ao renderizar: repinta a arte só nas faixas.
+				RedrawBars();
+			}
 			PortOverlay.Draw(GraphicsDevice);
 		}
 
 		private bool usesSideArt;
+
+		private static readonly RasterizerState ScissorState = new() { CullMode = CullMode.None, ScissorTestEnable = true };
+
+		/// <summary>Desenha a arte de novo somente fora da área do jogo (faixas laterais/superior/inferior).</summary>
+		private void RedrawBars()
+		{
+			PresentationParameters pp = GraphicsDevice.PresentationParameters;
+			Viewport view = Viewport;
+			GraphicsDevice.Viewport = new Viewport(0, 0, pp.BackBufferWidth, pp.BackBufferHeight);
+			Rectangle[] bars =
+			{
+				new(0, 0, view.X, pp.BackBufferHeight),
+				new(view.X + view.Width, 0, pp.BackBufferWidth - view.X - view.Width, pp.BackBufferHeight),
+				new(view.X, 0, view.Width, view.Y),
+				new(view.X, view.Y + view.Height, view.Width, pp.BackBufferHeight - view.Y - view.Height),
+			};
+			foreach (Rectangle bar in bars)
+			{
+				if (bar.Width <= 0 || bar.Height <= 0)
+				{
+					continue;
+				}
+				pillarboxBatch!.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.LinearClamp, null, ScissorState);
+				GraphicsDevice.ScissorRectangle = bar;
+				DrawArt(pp);
+				pillarboxBatch.End();
+			}
+			GraphicsDevice.Viewport = view;
+		}
 
 		/// <summary>Limpa a tela inteira: arte nas faixas ("side art") ou preto.</summary>
 		private void DrawBars()
@@ -134,6 +168,18 @@ namespace Monocle
 				GraphicsDevice.Viewport = new Viewport(0, 0, pp.BackBufferWidth, pp.BackBufferHeight);
 				GraphicsDevice.Clear(Color.Black);
 			}
+		}
+
+		/// <summary>"Cover": preenche a tela inteira mantendo a proporção da imagem (dentro de um Begin/End).</summary>
+		private static void DrawArt(PresentationParameters pp)
+		{
+			float scale = Math.Max(
+				pp.BackBufferWidth / (float)pillarboxBackground!.Width,
+				pp.BackBufferHeight / (float)pillarboxBackground.Height
+			);
+			Vector2 size = new Vector2(pillarboxBackground.Width, pillarboxBackground.Height) * scale;
+			Vector2 position = (new Vector2(pp.BackBufferWidth, pp.BackBufferHeight) - size) / 2f;
+			pillarboxBatch!.Draw(pillarboxBackground, position, null, Color.White, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
 		}
 
 		private void DrawPillarbox()
@@ -160,16 +206,8 @@ namespace Monocle
 			GraphicsDevice.Viewport = new Viewport(0, 0, pp.BackBufferWidth, pp.BackBufferHeight);
 			GraphicsDevice.Clear(Color.Black);
 
-			// "Cover": preenche a tela inteira mantendo a proporção da imagem.
-			float scale = Math.Max(
-				pp.BackBufferWidth / (float)pillarboxBackground.Width,
-				pp.BackBufferHeight / (float)pillarboxBackground.Height
-			);
-			Vector2 size = new Vector2(pillarboxBackground.Width, pillarboxBackground.Height) * scale;
-			Vector2 position = (new Vector2(pp.BackBufferWidth, pp.BackBufferHeight) - size) / 2f;
-
 			pillarboxBatch!.Begin(SpriteSortMode.Deferred, BlendState.Opaque, SamplerState.LinearClamp, null, null);
-			pillarboxBatch.Draw(pillarboxBackground, position, null, Color.White, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+			DrawArt(pp);
 			// Área do jogo: cor de fundo normal, para cenas que não cobrem a tela toda (loading, wipes).
 			Viewport view = Viewport;
 			pillarboxBatch.Draw(pillarboxPixel, new Rectangle(view.X, view.Y, view.Width, view.Height), ClearColor);
