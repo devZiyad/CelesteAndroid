@@ -1,32 +1,33 @@
 # Building CelesteAndroid
 
-This guide builds the APK from source on **Windows** (PowerShell). The scripts are PowerShell, but every step is plain `dotnet`/CMake/NDK and can be adapted to Linux/macOS.
+This guide builds the APK from source on **Linux** (developed on CachyOS). The scripts are bash; commands below are shown for fish.
 
 ## 1. Toolchain
 
 | Tool | Version used | Notes |
 |---|---|---|
-| .NET SDK | 10.0.x | `winget install Microsoft.DotNet.SDK.10` |
+| .NET SDK | 10.0.x | `dotnet-install.sh` into `~/.dotnet` |
 | .NET Android workload | 36.1 | `dotnet workload install android` |
-| JDK | 17 (Microsoft OpenJDK) | `winget install Microsoft.OpenJDK.17` |
+| JDK | 17 (Temurin) | `sdk install java 17.0.20-tem` |
 | Android SDK | platform 36, build-tools 36.0.0, platform-tools | via `cmdline-tools` |
 | Android NDK | **r27d** (27.3.13750724) | LTS; used for SDL3/FNA3D/FAudio |
-| CMake + Ninja | CMake 3.24+ / Ninja | any recent version on `PATH` |
-| 7-Zip | any | only to extract the FMOD Windows installer (desktop host) |
+| CMake + Ninja | CMake 3.24+ (4.x works) / Ninja | `scripts/build-natives-android.sh` passes `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` |
+| ImageMagick | any | only for `scripts/generate-game-art.sh` |
 
-Environment variables (user level):
+Environment (fish):
 
+```fish
+set -x JAVA_HOME ~/.sdkman/candidates/java/17.0.20-tem
+set -x ANDROID_HOME ~/Android/Sdk
+set -x ANDROID_NDK_HOME $ANDROID_HOME/ndk/27.3.13750724
+fish_add_path ~/.dotnet
 ```
-JAVA_HOME         = C:\Program Files\Microsoft\jdk-17...
-ANDROID_HOME      = C:\Android\sdk
-ANDROID_NDK_HOME  = C:\Android\sdk\ndk\27.3.13750724
-```
 
-> Recent versions of `sdkmanager` forward to the new **Android CLI** (`android.exe sdk install ...`), which may crash *on exit* (0xC0000409) after installing correctly. Check the installed folders rather than trusting the exit code.
+The scripts default to these values, so setting them is optional if your layout matches.
 
 ## 2. Clone
 
-```powershell
+```fish
 git clone --recursive https://github.com/BelmanteGu/CelesteAndroid
 ```
 
@@ -40,7 +41,7 @@ These are **not** in the repository and must never be committed (they're in `.gi
 |---|---|
 | `Celeste/` | Your Celeste PC copy, **FNA build** (`Celeste.exe`, `FNA.dll`, `Content/`). Steam: *opengl* beta. itch.io: Linux zip. Used for compiling the patch module and, optionally, for personal builds. |
 | `fmod/libs/android-arm64/` | `libfmod.so`, `libfmodstudio.so`, `fmod.jar` from the FMOD Engine **1.10.14** Android package (`api/lowlevel/lib/arm64-v8a`, `api/studio/lib/arm64-v8a`, `api/lowlevel/lib/fmod.jar`) |
-| `fmod/libs/win-x64/` | *(desktop host only)* `fmod64.dll` from the Windows package, copied as **both** `fmod.dll` and `fmod64.dll`, plus `fmodstudio64.dll` copied as `fmodstudio.dll` |
+| `Celeste/lib64/` | *(desktop host)* `libfmod.so.10` and `libfmodstudio.so.10` (FMOD 1.10, shipped with the Linux game); the desktop build copies them as `libfmod.so` / `libfmodstudio.so` |
 | `art/icon.png` (or `.jpg`) | *(optional)* square image for the app icon, used by every build. Without it, personal builds crop the key art and public builds use the original mountain icon. |
 | `art/logo.png` | *(optional, personal builds)* logo shown in the launcher instead of the text title |
 
@@ -48,45 +49,45 @@ Why 1.10.14: Celeste's `.bank` files were built with FMOD Studio 1.10, and the g
 
 ## 4. Native libraries
 
-```powershell
-scripts\build-natives-android.ps1          # -> natives\android-arm64\libSDL3.so, libFNA3D.so, libFAudio.so
+```fish
+scripts/build-natives-android.sh           # -> natives/android-arm64/libSDL3.so, libFNA3D.so, libFAudio.so
 ```
 
 API 26, arm64-v8a, `ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON` (16 KB page alignment for Android 15+).
 
 ## 5. APK
 
-```powershell
-scripts\build-release.ps1                  # public APK (no official art) -> out\
-scripts\build-release.ps1 -Personal        # official icon/logo from YOUR game files (don't share)
-scripts\build-release.ps1 -Personal -EmbedGame   # also bundles your game (~860 MB; don't share)
+```fish
+scripts/build-release.sh                   # public APK (no official art) -> out/
+scripts/build-release.sh --personal        # official icon/logo from YOUR game files (don't share)
+scripts/build-release.sh --personal --embed-game   # also bundles your game (~860 MB; don't share)
 ```
 
-Signing: if `%USERPROFILE%\.celeste-android\keystore.env` exists it's used (`CELESTE_KEYSTORE`, `CELESTE_KEYSTORE_ALIAS`, `CELESTE_KEYSTORE_PASS`); otherwise the debug key is used. Keep the same key across builds, or Android won't let you update without uninstalling (which deletes saves).
+Signing: uses `~/.celeste-android/release.jks`, alias `celeste` and the password in `$CELESTE_KEYSTORE_PASS` (override path/alias with `CELESTE_KEYSTORE` / `CELESTE_KEYSTORE_ALIAS`); without a password the debug key is used. Verify with `$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs out/*.apk`. Keep the same key across builds, or Android won't let you update without uninstalling (which deletes saves).
 
 ## 6. Desktop test host (optional)
 
-`src/Celeste.Desktop` runs the exact same patched `Celeste.dll` on Windows x64. It's the fastest way to test patches:
+`src/Celeste.Desktop` runs the exact same patched `Celeste.dll` on Linux x64. It's the fastest way to test patches:
 
-```powershell
-scripts\fetch-fnalibs.ps1                  # SDL3/FNA3D/FAudio x64 -> natives\win-x64
-dotnet run --project src\Celeste.Desktop    # finds .\Celeste automatically, or use --game <dir>
+```fish
+scripts/fetch-fnalibs.sh                   # SDL3/FNA3D/FAudio linux-x64 -> natives/linux-x64
+dotnet run --project src/Celeste.Desktop   # finds ./Celeste automatically, or use --game <dir>
 ```
 
-It behaves like the Android build (`Platform = "Android"`, saves go to `bin\...\userdata`), so your real PC saves are never touched.
+It behaves like the Android build (`Platform = "Android"`, saves go to `bin/.../userdata`), so your real PC saves are never touched.
 
 ## 7. Development loop on a device
 
-```powershell
-scripts\deploy-android.ps1 -Content        # first time: also pushes Content/ (1 GB)
-scripts\deploy-android.ps1                 # afterwards: patch + debug APK + patched dll
-adb logcat -s CelesteAndroid DOTNET SDL SDL/GPU fmod
+```fish
+scripts/deploy-android.sh --content        # first time: also pushes Content/ (1 GB)
+scripts/deploy-android.sh                  # afterwards: patch + debug APK + patched dll
+adb -s $ANDROID_SERIAL logcat -s CelesteAndroid DOTNET SDL SDL/GPU fmod
 ```
 
-The debug build is `run-as`-able, so the script copies files straight into the app's private storage. To regenerate the patch and background on the device without re-importing:
+The package is `org.devziyad.celeste` ("Celeste (dev)"), so it installs alongside the original app. The debug build is `run-as`-able, so the script copies files straight into the app's private storage. To regenerate the patch and background on the device without re-importing:
 
 ```
-adb shell am start -n org.celesteandroid.celeste/.LauncherActivity --ez repatch true
+adb -s $ANDROID_SERIAL shell am start -n org.devziyad.celeste/.LauncherActivity --ez repatch true
 ```
 
 To force OpenGL ES: `--es driver OpenGL` on `GameActivity`, or the *Graphics* toggle in the launcher.

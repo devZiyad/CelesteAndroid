@@ -47,27 +47,27 @@ Your saves live in the app's private storage, and uninstalling the app deletes t
 
 ## Building from source
 
-Short version (Windows; see [docs/BUILDING.md](docs/BUILDING.md) for details):
+Short version (Linux; see [docs/BUILDING.md](docs/BUILDING.md) for details):
 
-```powershell
+```fish
 git clone --recursive https://github.com/BelmanteGu/CelesteAndroid
 cd CelesteAndroid
-# 1. Put your Celeste (FNA build) in .\Celeste\ and the FMOD 1.10.14 Android libs in .\fmod\libs\android-arm64\
+# 1. Put your Celeste (FNA build) in ./Celeste/ and the FMOD 1.10.14 Android libs in ./fmod/libs/android-arm64/
 # 2. Native libs (SDL3, FNA3D, FAudio) for arm64 with the Android NDK:
-scripts\build-natives-android.ps1
+scripts/build-natives-android.sh
 # 3. APK:
-scripts\build-release.ps1              # -> out\CelesteAndroid-<version>.apk
+scripts/build-release.sh              # -> out/CelesteAndroid-<version>.apk
 ```
 
 Useful scripts:
 
 | Script | What it does |
 |---|---|
-| `scripts/build-natives-android.ps1` | Builds SDL3, FNA3D and FAudio for Android (NDK r27) |
-| `scripts/build-release.ps1` | Release APK. `-Personal` adds the official icon/logo taken from *your* game files; `-EmbedGame` puts your game inside the APK. **Personal APKs must never be shared.** |
-| `scripts/deploy-android.ps1` | Development loop: patch, install the APK and push files over `adb` |
-| `scripts/fetch-fnalibs.ps1` | Downloads the x64 fnalibs for the desktop test host |
-| `scripts/generate-game-art.ps1` | Extracts the icon/key art from your game files (for personal builds) |
+| `scripts/build-natives-android.sh` | Builds SDL3, FNA3D and FAudio for Android (NDK r27) |
+| `scripts/build-release.sh` | Release APK. `--personal` adds the official icon/logo taken from *your* game files; `--embed-game` puts your game inside the APK. **Personal APKs must never be shared.** |
+| `scripts/deploy-android.sh` | Development loop: patch, install the APK and push files over `adb` |
+| `scripts/fetch-fnalibs.sh` | Downloads the x64 fnalibs for the desktop test host |
+| `scripts/generate-game-art.sh` | Extracts the icon/key art from your game files (for personal builds) |
 
 ## How it works
 
