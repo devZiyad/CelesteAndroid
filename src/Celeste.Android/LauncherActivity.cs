@@ -34,6 +34,7 @@ namespace CelesteAndroid
 		private const int RequestZip = 2;
 		private const int RequestSaves = 3;
 		private const string PrefDriver = "driver";
+		private const string LogTag = "CelesteLauncher";
 
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
@@ -51,13 +52,18 @@ namespace CelesteAndroid
 		private ProgressBar progressBar = null!;
 		private TextView progressText = null!;
 		private bool busy;
+		private long nextStickNavMs;
+		private FocusSearchDirection? stickDir;
 
 		private ISharedPreferences Prefs => GetSharedPreferences("launcher", FileCreationMode.Private)!;
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
-			SetContentView(BuildLayout());
+			View root = BuildLayout();
+			SetContentView(root);
+			root.ViewTreeObserver!.GlobalFocusChange += (_, e) =>
+				Log.Info(LogTag, $"focus: {Describe(e.OldFocus)} -> {Describe(e.NewFocus)}");
 			HideSystemBars();
 			LoadArt();
 
@@ -90,12 +96,124 @@ namespace CelesteAndroid
 				Intent.RemoveExtra("repatch");
 				RunInstall(_ => { });
 			}
+			// Desenvolvimento (scripts/deploy-android.sh --play): abre o jogo direto.
+			if (!busy && Intent!.GetBooleanExtra("autoplay", false))
+			{
+				Intent.RemoveExtra("autoplay");
+				if (GameInstaller.IsInstalled(this))
+				{
+					Log.Info(LogTag, "autoplay: starting game");
+					Play();
+				}
+			}
 			// APK pessoal: o jogo já vem dentro do APK; instala sozinho na primeira abertura.
 			else if (!busy && !GameInstaller.IsInstalled(this) && GameInstaller.HasEmbeddedGame(this))
 			{
 				RunInstall(installer => installer.ImportEmbedded());
 			}
 		}
+
+		#region Controle
+
+		private static string Describe(View? view) => view?.ContentDescription ?? view?.GetType().Name ?? "none";
+
+		/// <summary>Torna a view alcançável por D-pad/analógico e dá um leve zoom enquanto focada.</summary>
+		private void Focusable(View view, string name)
+		{
+			view.ContentDescription = name;
+			view.Focusable = true;
+			view.FocusableInTouchMode = true;
+			view.FocusChange += (_, e) =>
+				view.Animate()!.ScaleX(e.HasFocus ? 1.05f : 1f).ScaleY(e.HasFocus ? 1.05f : 1f).SetDuration(120).Start();
+		}
+
+		private void EnsureFocus()
+		{
+			if (CurrentFocus != null && CurrentFocus.IsShown && CurrentFocus.Enabled)
+				return;
+			if (play.Enabled)
+				play.RequestFocus();
+			else
+				openFolder.RequestFocus();
+		}
+
+		private bool MoveFocus(FocusSearchDirection dir)
+		{
+			if (busy)
+				return true;
+			View? from = CurrentFocus;
+			if (from == null)
+			{
+				EnsureFocus();
+				return true;
+			}
+			View? next = from.FocusSearch(dir);
+			if (next != null)
+				next.RequestFocus(dir);
+			return true;
+		}
+
+		public override bool DispatchKeyEvent(KeyEvent? e)
+		{
+			if (e == null)
+				return base.DispatchKeyEvent(e);
+			Keycode code = e.KeyCode;
+			Log.Info(LogTag, $"key: {code} {e.Action}");
+			switch (code)
+			{
+				case Keycode.ButtonA:
+					// A = confirmar (o Android só mapeia ENTER/DPAD_CENTER por padrão).
+					if (e.Action == KeyEventActions.Up && !busy)
+					{
+						View? target = CurrentFocus;
+						Log.Info(LogTag, $"confirm: {Describe(target)}");
+						target?.PerformClick();
+					}
+					return true;
+				case Keycode.ButtonB:
+					if (e.Action == KeyEventActions.Up && !busy)
+					{
+						Log.Info(LogTag, "back: exit launcher");
+						Finish();
+					}
+					return true;
+			}
+			return base.DispatchKeyEvent(e);
+		}
+
+		/// <summary>Analógico esquerdo e D-pad "hat" (que muitos controles reportam como eixo) movem o foco, com repetição.</summary>
+		public override bool OnGenericMotionEvent(MotionEvent? e)
+		{
+			if (e != null && e.Action == MotionEventActions.Move
+				&& (e.Source & InputSourceType.Joystick) == InputSourceType.Joystick)
+			{
+				float x = e.GetAxisValue(Axis.HatX), y = e.GetAxisValue(Axis.HatY);
+				if (x == 0 && y == 0) { x = e.GetAxisValue(Axis.X); y = e.GetAxisValue(Axis.Y); }
+				FocusSearchDirection? dir = null;
+				if (Math.Abs(x) > 0.6f || Math.Abs(y) > 0.6f)
+				{
+					dir = Math.Abs(x) > Math.Abs(y)
+						? (x > 0 ? FocusSearchDirection.Right : FocusSearchDirection.Left)
+						: (y > 0 ? FocusSearchDirection.Down : FocusSearchDirection.Up);
+				}
+				long now = SystemClock.UptimeMillis();
+				if (dir == null)
+				{
+					stickDir = null;
+				}
+				else if (dir != stickDir || now >= nextStickNavMs)
+				{
+					nextStickNavMs = now + (dir != stickDir ? 380 : 140);
+					stickDir = dir;
+					Log.Info(LogTag, $"stick: {dir}");
+					MoveFocus(dir.Value);
+				}
+				return true;
+			}
+			return base.OnGenericMotionEvent(e);
+		}
+
+		#endregion
 
 		#region Layout
 
@@ -150,19 +268,24 @@ namespace CelesteAndroid
 
 			play = PillButton("PLAY", filled: true);
 			play.Click += (_, _) => Play();
+			Focusable(play, "Play");
 			panel.AddView(play, new LinearLayout.LayoutParams(Dp(260), Dp(50)) { TopMargin = Dp(14) });
 
 			openFolder = PillButton("Open game files", filled: false);
 			openFolder.Click += (_, _) => PickFolder();
+			Focusable(openFolder, "OpenGameFiles");
 			panel.AddView(openFolder, new LinearLayout.LayoutParams(Dp(260), Dp(44)) { TopMargin = Dp(10) });
 
 			links = new LinearLayout(this) { Orientation = Orientation.Horizontal };
 			openZip = LinkText("Import .zip");
 			openZip.Click += (_, _) => PickZip();
+			Focusable(openZip, "ImportZip");
 			importSaves = LinkText("Import saves");
 			importSaves.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestSaves);
+			Focusable(importSaves, "ImportSaves");
 			driverToggle = LinkText("");
 			driverToggle.Click += (_, _) => ToggleDriver();
+			Focusable(driverToggle, "GraphicsDriver");
 			links.AddView(openZip);
 			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
 			links.AddView(importSaves);
@@ -179,7 +302,7 @@ namespace CelesteAndroid
 			progressBox.AddView(progressText, Margins(top: 6));
 			panel.AddView(progressBox, Margins(top: 12));
 
-			var hint = Text("Controller recommended", 12, Color.Argb(150, 255, 255, 255), TypefaceStyle.Normal);
+			var hint = Text("A  select     B  back     D-pad / stick  move", 12, Color.Argb(150, 255, 255, 255), TypefaceStyle.Normal);
 			var hintParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent,
 				GravityFlags.Bottom | GravityFlags.End) { RightMargin = Dp(28), BottomMargin = Dp(20) };
 			root.AddView(hint, hintParams);
@@ -222,7 +345,16 @@ namespace CelesteAndroid
 				shape.SetStroke(Dp(1.5f), Color.Argb(200, 255, 255, 255));
 				button.SetTextColor(Color.White);
 			}
-			button.Background = new RippleDrawable(Android.Content.Res.ColorStateList.ValueOf(Color.Argb(60, 242, 184, 216)), shape, null);
+			var ripple = new RippleDrawable(Android.Content.Res.ColorStateList.ValueOf(Color.Argb(60, 242, 184, 216)), shape, null);
+			// Foco (controle/teclado): contorno rosa grosso, bem visível à distância.
+			var focused = new GradientDrawable();
+			focused.SetCornerRadius(Dp(25));
+			focused.SetColor(filled ? Color.Argb(255, 255, 236, 246) : Color.Argb(110, 242, 184, 216));
+			focused.SetStroke(Dp(3.5f), Accent);
+			var states = new StateListDrawable();
+			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, focused);
+			states.AddState(new int[0], ripple);
+			button.Background = states;
 			return button;
 		}
 
@@ -238,7 +370,15 @@ namespace CelesteAndroid
 		private TextView LinkText(string text)
 		{
 			var view = Text(text, 14, Accent, TypefaceStyle.Normal);
-			view.SetPadding(0, Dp(6), 0, Dp(6));
+			view.SetPadding(Dp(8), Dp(6), Dp(8), Dp(6));
+			var focused = new GradientDrawable();
+			focused.SetCornerRadius(Dp(14));
+			focused.SetColor(Color.Argb(70, 242, 184, 216));
+			focused.SetStroke(Dp(2.5f), Accent);
+			var states = new StateListDrawable();
+			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, focused);
+			states.AddState(new int[0], new ColorDrawable(Color.Transparent));
+			view.Background = states;
 			return view;
 		}
 
@@ -290,6 +430,7 @@ namespace CelesteAndroid
 					: "Pick the folder of your Celeste PC copy (FNA / \"opengl\" build) or the itch.io .zip.";
 			}
 			driverToggle.Text = "Graphics: " + (Prefs.GetString(PrefDriver, "") == "OpenGL" ? "OpenGL ES" : "Vulkan");
+			EnsureFocus();
 		}
 
 		private void Play()
