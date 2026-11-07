@@ -48,6 +48,13 @@ namespace CelesteAndroid
 				Process.KillProcess(Process.MyPid());
 		}
 
+		// SDL calls this when it creates the window and would switch the activity to FULL_USER (portrait allowed),
+		// overriding the manifest: the port is landscape only.
+		public override void SetOrientationBis(int w, int h, bool resizable, string hint)
+		{
+			RequestedOrientation = ScreenOrientation.SensorLandscape;
+		}
+
 		// Called by SDL on the "SDLThread" thread once the surface exists; replaces the native SDL_main.
 		protected override void Main()
 		{
