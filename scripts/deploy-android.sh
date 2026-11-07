@@ -18,7 +18,18 @@ for a in "$@"; do
 done
 [ -n "${ANDROID_SERIAL:-}" ] || die "ANDROID_SERIAL is not set"
 PKG=org.devziyad.celeste
-ADB=("$ANDROID_HOME/platform-tools/adb" -s "$ANDROID_SERIAL")
+ADB_BIN="$ANDROID_HOME/platform-tools/adb"
+# Wireless adb can drop and re-register between steps: wait for the device and retry before each call.
+adb_s() {
+	local i
+	for i in 1 2 3 4 5; do
+		"$ADB_BIN" -s "$ANDROID_SERIAL" wait-for-device 2>/dev/null || true
+		"$ADB_BIN" -s "$ANDROID_SERIAL" "$@" && return 0
+		sleep 3
+	done
+	return 1
+}
+ADB=(adb_s)
 
 echo "=== patch ==="
 dotnet build "$ROOT/src/Celeste.Desktop" -nologo -v q >&2
