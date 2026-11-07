@@ -28,12 +28,11 @@ namespace CelesteAndroid
 		LaunchMode = LaunchMode.SingleTop,
 		ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout
 			| ConfigChanges.Keyboard | ConfigChanges.KeyboardHidden | ConfigChanges.Navigation)]
-	public class LauncherActivity : Activity
+	public class LauncherActivity : ControllerActivity
 	{
 		private const int RequestFolder = 1;
 		private const int RequestZip = 2;
 		private const int RequestSaves = 3;
-		private const string PrefDriver = "driver";
 		private const string LogTag = "CelesteLauncher";
 
 		private static readonly Color Night = Color.ParseColor("#120C22");
@@ -46,24 +45,20 @@ namespace CelesteAndroid
 		private Button openFolder = null!;
 		private TextView openZip = null!;
 		private TextView importSaves = null!;
-		private TextView driverToggle = null!;
+		private TextView settingsLink = null!;
 		private LinearLayout links = null!;
 		private LinearLayout progressBox = null!;
 		private ProgressBar progressBar = null!;
 		private TextView progressText = null!;
 		private bool busy;
-		private long nextStickNavMs;
-		private FocusSearchDirection? stickDir;
 
-		private ISharedPreferences Prefs => GetSharedPreferences("launcher", FileCreationMode.Private)!;
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
 			View root = BuildLayout();
 			SetContentView(root);
-			root.ViewTreeObserver!.GlobalFocusChange += (_, e) =>
-				Log.Info(LogTag, $"focus: {Describe(e.OldFocus)} -> {Describe(e.NewFocus)}");
+			WatchFocus(root);
 			HideSystemBars();
 			LoadArt();
 
@@ -113,105 +108,14 @@ namespace CelesteAndroid
 			}
 		}
 
-		#region Controle
-
-		private static string Describe(View? view) => view?.ContentDescription ?? view?.GetType().Name ?? "none";
-
-		/// <summary>Torna a view alcançável por D-pad/analógico (o destaque do foco é o contorno do fundo; sem zoom, que cortava as pontas).</summary>
-		private void Focusable(View view, string name)
+		protected override string Tag => LogTag;
+		protected override View? InitialFocus() => play.Enabled ? play : openFolder;
+		protected override bool InputBlocked => busy;
+		protected override void OnBackButton()
 		{
-			view.ContentDescription = name;
-			view.Focusable = true;
-			view.FocusableInTouchMode = true;
+			Log.Info(LogTag, "back: exit launcher");
+			Finish();
 		}
-
-		private void EnsureFocus()
-		{
-			if (CurrentFocus != null && CurrentFocus.IsShown && CurrentFocus.Enabled)
-				return;
-			if (play.Enabled)
-				play.RequestFocus();
-			else
-				openFolder.RequestFocus();
-		}
-
-		private bool MoveFocus(FocusSearchDirection dir)
-		{
-			if (busy)
-				return true;
-			View? from = CurrentFocus;
-			if (from == null)
-			{
-				EnsureFocus();
-				return true;
-			}
-			View? next = from.FocusSearch(dir);
-			if (next != null)
-				next.RequestFocus(dir);
-			return true;
-		}
-
-		public override bool DispatchKeyEvent(KeyEvent? e)
-		{
-			if (e == null)
-				return base.DispatchKeyEvent(e);
-			Keycode code = e.KeyCode;
-			Log.Info(LogTag, $"key: {code} {e.Action}");
-			switch (code)
-			{
-				case Keycode.ButtonA:
-					// A = confirmar (o Android só mapeia ENTER/DPAD_CENTER por padrão).
-					if (e.Action == KeyEventActions.Up && !busy)
-					{
-						View? target = CurrentFocus;
-						Log.Info(LogTag, $"confirm: {Describe(target)}");
-						target?.PerformClick();
-					}
-					return true;
-				case Keycode.ButtonB:
-					if (e.Action == KeyEventActions.Up && !busy)
-					{
-						Log.Info(LogTag, "back: exit launcher");
-						Finish();
-					}
-					return true;
-			}
-			return base.DispatchKeyEvent(e);
-		}
-
-		/// <summary>Analógico esquerdo e D-pad "hat" (que muitos controles reportam como eixo) movem o foco, com repetição.</summary>
-		public override bool OnGenericMotionEvent(MotionEvent? e)
-		{
-			if (e != null && e.Action == MotionEventActions.Move
-				&& (e.Source & InputSourceType.Joystick) == InputSourceType.Joystick)
-			{
-				float x = e.GetAxisValue(Axis.HatX), y = e.GetAxisValue(Axis.HatY);
-				if (x == 0 && y == 0) { x = e.GetAxisValue(Axis.X); y = e.GetAxisValue(Axis.Y); }
-				FocusSearchDirection? dir = null;
-				if (Math.Abs(x) > 0.6f || Math.Abs(y) > 0.6f)
-				{
-					dir = Math.Abs(x) > Math.Abs(y)
-						? (x > 0 ? FocusSearchDirection.Right : FocusSearchDirection.Left)
-						: (y > 0 ? FocusSearchDirection.Down : FocusSearchDirection.Up);
-				}
-				long now = SystemClock.UptimeMillis();
-				if (dir == null)
-				{
-					stickDir = null;
-				}
-				else if (dir != stickDir || now >= nextStickNavMs)
-				{
-					nextStickNavMs = now + (dir != stickDir ? 380 : 140);
-					stickDir = dir;
-					Log.Info(LogTag, $"stick: {dir}");
-					MoveFocus(dir.Value);
-				}
-				return true;
-			}
-			return base.OnGenericMotionEvent(e);
-		}
-
-		#endregion
 
 		#region Layout
 
@@ -266,29 +170,29 @@ namespace CelesteAndroid
 
 			play = PillButton("PLAY", filled: true);
 			play.Click += (_, _) => Play();
-			Focusable(play, "Play");
+			MakeFocusable(play, "Play");
 			panel.AddView(play, new LinearLayout.LayoutParams(Dp(260), Dp(50)) { TopMargin = Dp(14) });
 
 			openFolder = PillButton("Open game files", filled: false);
 			openFolder.Click += (_, _) => PickFolder();
-			Focusable(openFolder, "OpenGameFiles");
+			MakeFocusable(openFolder, "OpenGameFiles");
 			panel.AddView(openFolder, new LinearLayout.LayoutParams(Dp(260), Dp(44)) { TopMargin = Dp(10) });
 
 			links = new LinearLayout(this) { Orientation = Orientation.Horizontal };
 			openZip = LinkText("Import .zip");
 			openZip.Click += (_, _) => PickZip();
-			Focusable(openZip, "ImportZip");
+			MakeFocusable(openZip, "ImportZip");
 			importSaves = LinkText("Import saves");
 			importSaves.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestSaves);
-			Focusable(importSaves, "ImportSaves");
-			driverToggle = LinkText("");
-			driverToggle.Click += (_, _) => ToggleDriver();
-			Focusable(driverToggle, "GraphicsDriver");
+			MakeFocusable(importSaves, "ImportSaves");
+			settingsLink = LinkText("Port settings");
+			settingsLink.Click += (_, _) => StartActivity(new Intent(this, typeof(PortSettingsActivity)));
+			MakeFocusable(settingsLink, "PortSettings");
 			links.AddView(openZip);
 			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
 			links.AddView(importSaves);
 			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 10, right: 10));
-			links.AddView(driverToggle);
+			links.AddView(settingsLink);
 			panel.AddView(links, Margins(top: 6, left: 6));
 
 			progressBox = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
@@ -391,21 +295,6 @@ namespace CelesteAndroid
 
 		private int Dp(float dp) => (int)TypedValue.ApplyDimension(ComplexUnitType.Dip, dp, Resources!.DisplayMetrics);
 
-		private void HideSystemBars()
-		{
-			if (!OperatingSystem.IsAndroidVersionAtLeast(30))
-				return;
-			// A partir do Android 15 o app já é edge-to-edge por padrão.
-			if (!OperatingSystem.IsAndroidVersionAtLeast(35))
-				Window!.SetDecorFitsSystemWindows(false);
-			IWindowInsetsController? insets = Window!.InsetsController;
-			if (insets != null)
-			{
-				insets.Hide(WindowInsets.Type.SystemBars());
-				insets.SystemBarsBehavior = (int)WindowInsetsControllerBehavior.ShowTransientBarsBySwipe;
-			}
-		}
-
 		#endregion
 
 		#region Estado e ações
@@ -427,24 +316,16 @@ namespace CelesteAndroid
 					? "✓  Ready to play"
 					: "Pick the folder of your Celeste PC copy (FNA / \"opengl\" build) or the itch.io .zip.";
 			}
-			driverToggle.Text = "Graphics: " + (Prefs.GetString(PrefDriver, "") == "OpenGL" ? "OpenGL ES" : "Vulkan");
 			EnsureFocus();
 		}
 
 		private void Play()
 		{
 			var intent = new Intent(this, typeof(GameActivity));
-			string? driver = Prefs.GetString(PrefDriver, "");
-			if (!string.IsNullOrEmpty(driver))
+			string driver = PortSettings.GetValue(this, PortSettings.Renderer);
+			if (driver == "OpenGL")
 				intent.PutExtra(GameActivity.ExtraDriver, driver);
 			StartActivity(intent);
-		}
-
-		private void ToggleDriver()
-		{
-			string next = Prefs.GetString(PrefDriver, "") == "OpenGL" ? "" : "OpenGL";
-			Prefs.Edit()!.PutString(PrefDriver, next)!.Apply();
-			RefreshState();
 		}
 
 		private void PickFolder()
