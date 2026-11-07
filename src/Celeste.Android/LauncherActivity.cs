@@ -32,7 +32,7 @@ namespace CelesteAndroid
 	{
 		private const int RequestFolder = 1;
 		private const int RequestZip = 2;
-		private const int RequestSaves = 3;
+		private const int RequestConfig = 3;
 		private const int RequestSteam = 4;
 		private const string LogTag = "CelesteLauncher";
 
@@ -44,14 +44,10 @@ namespace CelesteAndroid
 		private TextView status = null!;
 		private TextView play = null!;
 		private TextView steamButton = null!;
+		private TextView configButton = null!;
 		private TextView importFolder = null!;
-		private TextView deleteGame = null!;
-		private LinearLayout links2 = null!;
-		private TextView deleteSeparator = null!;
 		private TextView openZip = null!;
-		private TextView importSaves = null!;
-		private TextView settingsLink = null!;
-		private LinearLayout links = null!;
+		private LinearLayout importRow = null!;
 		private LinearLayout progressBox = null!;
 		private ProgressBar progressBar = null!;
 		private TextView progressText = null!;
@@ -203,7 +199,10 @@ namespace CelesteAndroid
 		}
 
 		protected override string Tag => LogTag;
-		protected override View? InitialFocus() => play.Enabled ? play : steamButton;
+		protected override View? InitialFocus() =>
+			play.Visibility == ViewStates.Visible && play.Enabled ? play
+			: steamButton.Visibility == ViewStates.Visible && steamButton.Enabled ? steamButton
+			: configButton;
 		protected override bool InputBlocked => busy;
 		protected override void OnBackButton()
 		{
@@ -274,39 +273,27 @@ namespace CelesteAndroid
 			MakeFocusable(play, "Play");
 			panel.AddView(play, UiKit.ButtonParams(this, 260, marginTop: 14));
 
-			steamButton = PillButton("Install from Steam", filled: false);
+			// Game not installed: a large "Install from Steam" (focused), smaller "Import folder" / "Import .zip", and Config.
+			steamButton = PillButton("Install from Steam", filled: true);
 			steamButton.Click += (_, _) => StartSteam();
 			MakeFocusable(steamButton, "InstallFromSteam");
-			panel.AddView(steamButton, UiKit.ButtonParams(this, 260, marginTop: 8));
+			panel.AddView(steamButton, UiKit.ButtonParams(this, 260, marginTop: 14));
 
-			links = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-			importFolder = LinkText("Import folder");
+			importRow = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Horizontal });
+			importFolder = PillButton("Import folder", filled: false, small: true);
 			importFolder.Click += (_, _) => PickFolder();
 			MakeFocusable(importFolder, "ImportFolder");
-			openZip = LinkText("Import .zip");
+			openZip = PillButton("Import .zip", filled: false, small: true);
 			openZip.Click += (_, _) => PickZip();
 			MakeFocusable(openZip, "ImportZip");
-			importSaves = LinkText("Import saves");
-			importSaves.Click += (_, _) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestSaves);
-			MakeFocusable(importSaves, "ImportSaves");
-			settingsLink = LinkText("Port settings");
-			settingsLink.Click += (_, _) => StartActivity(new Intent(this, typeof(PortSettingsActivity)));
-			MakeFocusable(settingsLink, "PortSettings");
-			deleteGame = LinkText("Delete game files");
-			deleteGame.Click += (_, _) => ConfirmDeleteGame();
-			MakeFocusable(deleteGame, "DeleteGameFiles");
-			links.AddView(importFolder);
-			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 8, right: 8));
-			links.AddView(openZip);
-			links.AddView(Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal), Margins(left: 8, right: 8));
-			links.AddView(importSaves);
-			panel.AddView(links, Margins(top: 4, left: 6));
-			links2 = new LinearLayout(this) { Orientation = Orientation.Horizontal };
-			links2.AddView(settingsLink);
-			deleteSeparator = Text("·", 14, Color.Argb(120, 255, 255, 255), TypefaceStyle.Normal);
-			links2.AddView(deleteSeparator, Margins(left: 8, right: 8));
-			links2.AddView(deleteGame);
-			panel.AddView(links2, Margins(top: 0, left: 6));
+			importRow.AddView(importFolder, UiKit.ButtonParams(this, 126, marginTop: 6));
+			importRow.AddView(openZip, UiKit.ButtonParams(this, 126, marginTop: 6));
+			panel.AddView(importRow);
+
+			configButton = PillButton("Config", filled: false, small: true);
+			configButton.Click += (_, _) => StartActivityForResult(new Intent(this, typeof(ConfigActivity)), RequestConfig);
+			MakeFocusable(configButton, "Config");
+			panel.AddView(configButton, UiKit.ButtonParams(this, 126, marginTop: 6));
 
 			progressBox = new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone };
 			progressBar = new ProgressBar(this, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Max = 1000 };
@@ -340,7 +327,7 @@ namespace CelesteAndroid
 				art.SetImageResource(Resource.Drawable.launcher_art);
 		}
 
-		private TextView PillButton(string label, bool filled) => UiKit.Pill(this, label, filled, minHeightDp: filled ? 50 : 44);
+		private TextView PillButton(string label, bool filled, bool small = false) => UiKit.Pill(this, label, filled, minHeightDp: small ? 38 : filled ? 54 : 44);
 
 		private TextView Text(string text, float sp, Color color, TypefaceStyle style)
 		{
@@ -384,21 +371,16 @@ namespace CelesteAndroid
 		private void RefreshState()
 		{
 			bool installed = GameInstaller.IsInstalled(this);
-			play.Enabled = installed && !busy;
-			play.Alpha = play.Enabled ? 1f : 0.4f;
-			// "Update from Steam" is gone from here: updates live in Port settings > Check for updates.
 			bool installing = InstallCoordinator.IsActive;
+			// Installed: only Play (large, focused) and Config. Not installed: Install from Steam (large), Import folder / .zip, Config.
+			play.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
+			play.Enabled = installed && !busy;
 			steamButton.Visibility = installed && !installing ? ViewStates.Gone : ViewStates.Visible;
 			steamButton.Enabled = !busy;
+			importRow.Visibility = installed || busy || installing ? ViewStates.Gone : ViewStates.Visible;
 			importFolder.Enabled = !busy;
 			openZip.Enabled = !busy;
-			importSaves.Enabled = !busy;
-			deleteGame.Enabled = !busy;
-			deleteGame.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
-			deleteSeparator.Visibility = deleteGame.Visibility;
-			// The screen is short (~360dp): during installation the progress bar takes the links' place.
-			links.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
-			links2.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
+			configButton.Enabled = !busy;
 			steamButton.Text = installing ? "Installing… (view progress)" : "Install from Steam";
 			if (installing)
 			{
@@ -412,14 +394,21 @@ namespace CelesteAndroid
 			else if (!busy)
 			{
 				bool paused = File.Exists(SteamTokenStore.ResumeStatePath(this));
-				status.Text = installed
-					? "✓  Ready to play"
-					: paused
+				// No "Ready to play" label: the Play button says it. The line is only for messages and for the not-installed hint.
+				if (installed) { if (statusIsHint) status.Text = ""; }
+				else
+				{
+					statusIsHint = true;
+					status.Text = paused
 						? "Download paused: choose Install from Steam to resume."
 						: "Install Celeste from your Steam account, or import the folder of your PC copy / the Linux .zip.";
+				}
 			}
 			EnsureFocus();
 		}
+
+		/// <summary>True while the status line only shows the not-installed hint (so it can be cleared once the game is installed).</summary>
+		private bool statusIsHint;
 
 		private void Play()
 		{
@@ -515,6 +504,11 @@ namespace CelesteAndroid
 		protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
 		{
 			base.OnActivityResult(requestCode, resultCode, data);
+			if (requestCode == RequestConfig)
+			{
+				HandleConfigResult(resultCode, data);
+				return;
+			}
 			if (requestCode == RequestSteam)
 			{
 				LoadArt();
@@ -530,8 +524,39 @@ namespace CelesteAndroid
 				RunInstall(installer => installer.ImportFolder(uri));
 			else if (requestCode == RequestZip)
 				RunInstall(installer => installer.ImportZip(uri));
-			else if (requestCode == RequestSaves)
-				RunJob(installer => $"✓  Imported {installer.ImportSaves(uri)} save file(s)");
+		}
+
+		/// <summary>Config hands back what needs the launcher's progress UI (imports, exports, delete).</summary>
+		private void HandleConfigResult(Result resultCode, Intent? data)
+		{
+			RefreshState();
+			string? action = data?.GetStringExtra(ConfigActivity.ExtraAction);
+			Uri? uri = data?.Data;
+			if (resultCode != Result.Ok || action == null) return;
+			switch (action)
+			{
+				case ConfigActivity.ActionDelete:
+					ConfirmDeleteGame();
+					break;
+				case ConfigActivity.ActionImportSavesFolder when uri != null:
+					RunJob(installer => $"✓  Imported {installer.ImportSavesFromFolder(uri)} save file(s); the previous saves were backed up");
+					break;
+				case ConfigActivity.ActionImportSavesZip when uri != null:
+					RunJob(installer => $"✓  Imported {installer.ImportSavesFromZip(uri)} save file(s); the previous saves were backed up");
+					break;
+				case ConfigActivity.ActionExportSavesFolder when uri != null:
+					RunJob(installer => $"✓  Exported {installer.ExportSavesToFolder(uri)} save file(s)");
+					break;
+				case ConfigActivity.ActionExportSavesZip when uri != null:
+					RunJob(installer => $"✓  Exported {installer.ExportSavesToZip(uri)} save file(s)");
+					break;
+				case ConfigActivity.ActionReimportFolder when uri != null:
+					RunInstall(installer => installer.ImportFolder(uri));
+					break;
+				case ConfigActivity.ActionReimportZip when uri != null:
+					RunInstall(installer => installer.ImportZip(uri));
+					break;
+			}
 		}
 
 		/// <summary>Game import: copy → patch → background.</summary>
@@ -585,6 +610,7 @@ namespace CelesteAndroid
 					busy = false;
 					progressBox.Visibility = ViewStates.Gone;
 					RefreshState();
+					statusIsHint = false;
 					status.Text = error ?? success;
 				});
 			}) { Name = "CelesteInstall", IsBackground = true }.Start();

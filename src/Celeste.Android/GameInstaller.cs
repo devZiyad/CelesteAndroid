@@ -100,11 +100,72 @@ namespace CelesteAndroid
 			CopyAll(files.Select(f => (f[(GameAssetsRoot.Length + 1)..], -1L, (Func<Stream>)(() => context.Assets!.Open(f)))));
 		}
 
+		#region Saves
+
+		public static string SavesDir(Context context) => Path.Combine(UserDir(context), "Celeste", "Saves");
+
+		/// <summary>"0.celeste", "1.celeste", "2.celeste", "debug.celeste" and "settings.celeste": the files the game keeps in Saves/.</summary>
+		private static bool IsSaveFileName(string name) =>
+			name.EndsWith(".celeste", StringComparison.OrdinalIgnoreCase)
+			&& (name.Equals("settings.celeste", StringComparison.OrdinalIgnoreCase) || name.Equals("debug.celeste", StringComparison.OrdinalIgnoreCase)
+				|| (name.Length > ".celeste".Length && name[..^".celeste".Length].All(char.IsAsciiDigit)));
+
+		/// <summary>Reads the current save files (raw bytes, never re-serialized, so an export matches byte for byte).</summary>
+		private List<(string Name, byte[] Data)> ReadCurrentSaves()
+		{
+			string dir = SavesDir(context);
+			if (!Directory.Exists(dir))
+				return new();
+			return Directory.GetFiles(dir, "*.celeste").Where(f => IsSaveFileName(Path.GetFileName(f)))
+				.OrderBy(f => f, StringComparer.Ordinal).Select(f => (Path.GetFileName(f), File.ReadAllBytes(f))).ToList();
+		}
+
+		/// <summary>Writes the save files (and the settings) into a folder chosen with the file picker.</summary>
+		public int ExportSavesToFolder(Uri treeUri)
+		{
+			progress("Exporting saves…", -1);
+			List<(string Name, byte[] Data)> saves = ReadCurrentSaves();
+			if (saves.Count == 0)
+				throw new InstallException("There are no save files to export yet.");
+			ContentResolver resolver = context.ContentResolver!;
+			string rootId = DocumentsContract.GetTreeDocumentId(treeUri)!;
+			Uri parent = DocumentsContract.BuildDocumentUriUsingTree(treeUri, rootId)!;
+			List<Doc> existing = ListChildren(treeUri, rootId);
+			foreach ((string name, byte[] data) in saves)
+			{
+				Doc old = existing.FirstOrDefault(d => d.Name == name && !d.IsDir);
+				Uri target = old.Id != null
+					? DocumentsContract.BuildDocumentUriUsingTree(treeUri, old.Id)!
+					: DocumentsContract.CreateDocument(resolver, parent, "application/octet-stream", name)
+						?? throw new InstallException("Couldn't create " + name + " in that folder.");
+				using Stream output = resolver.OpenOutputStream(target, "wt")!;
+				output.Write(data, 0, data.Length);
+			}
+			return saves.Count;
+		}
+
+		/// <summary>Writes the save files (and the settings) into a .zip created with the file picker.</summary>
+		public int ExportSavesToZip(Uri zipUri)
+		{
+			progress("Exporting saves…", -1);
+			List<(string Name, byte[] Data)> saves = ReadCurrentSaves();
+			if (saves.Count == 0)
+				throw new InstallException("There are no save files to export yet.");
+			using Stream output = context.ContentResolver!.OpenOutputStream(zipUri, "wt")
+				?? throw new InstallException("Couldn't write to that file.");
+			using var zip = new ZipArchive(output, ZipArchiveMode.Create);
+			foreach ((string name, byte[] data) in saves)
+			{
+				using Stream entry = zip.CreateEntry(name, CompressionLevel.Optimal).Open();
+				entry.Write(data, 0, data.Length);
+			}
+			return saves.Count;
+		}
+
 		/// <summary>
 		/// Saves from a PC (or another device): a folder with the .celeste files, or the game folder with Saves/ inside.
-		/// Current saves go to Backups/ before being replaced.
 		/// </summary>
-		public int ImportSaves(Uri treeUri)
+		public int ImportSavesFromFolder(Uri treeUri)
 		{
 			progress("Looking for save files…", -1);
 			string rootId = DocumentsContract.GetTreeDocumentId(treeUri)!;
@@ -112,25 +173,80 @@ namespace CelesteAndroid
 			Doc? savesDir = files.FirstOrDefault(d => d.IsDir && d.Name.Equals("Saves", StringComparison.OrdinalIgnoreCase));
 			if (savesDir is Doc dir)
 				files = ListChildren(treeUri, dir.Id);
-			List<Doc> saves = files.Where(d => !d.IsDir && d.Name.EndsWith(".celeste", StringComparison.OrdinalIgnoreCase)).ToList();
-			if (saves.Count == 0)
-				throw new InstallException("No .celeste save files in that folder.");
-
-			string target = Path.Combine(UserDir(context), "Celeste", "Saves");
-			string backup = Path.Combine(UserDir(context), "Celeste", "Backups");
-			Directory.CreateDirectory(target);
-			Directory.CreateDirectory(backup);
-			foreach (string existing in Directory.GetFiles(target, "*.celeste"))
-				File.Copy(existing, Path.Combine(backup, Path.GetFileName(existing)), overwrite: true);
-
-			foreach (Doc save in saves)
+			var found = new List<(string Name, byte[] Data)>();
+			foreach (Doc save in files.Where(d => !d.IsDir && IsSaveFileName(d.Name)))
 			{
 				using Stream input = context.ContentResolver!.OpenInputStream(DocumentsContract.BuildDocumentUriUsingTree(treeUri, save.Id)!)!;
-				using FileStream output = File.Create(Path.Combine(target, save.Name));
-				input.CopyTo(output);
+				using var memory = new MemoryStream();
+				input.CopyTo(memory);
+				found.Add((save.Name, memory.ToArray()));
 			}
-			return saves.Count;
+			return ImportSaveFiles(found);
 		}
+
+		/// <summary>Saves from a .zip (the files may sit at the top or in a Saves/ folder).</summary>
+		public int ImportSavesFromZip(Uri zipUri)
+		{
+			progress("Reading the .zip…", -1);
+			using Stream input = context.ContentResolver!.OpenInputStream(zipUri) ?? throw new InstallException("Couldn't open the file.");
+			using var zip = new ZipArchive(input, ZipArchiveMode.Read);
+			var found = new List<(string Name, byte[] Data)>();
+			foreach (ZipArchiveEntry entry in zip.Entries.Where(e => e.Name.Length > 0 && IsSaveFileName(e.Name)))
+			{
+				using Stream stream = entry.Open();
+				using var memory = new MemoryStream();
+				stream.CopyTo(memory);
+				found.Add((entry.Name, memory.ToArray()));
+			}
+			return ImportSaveFiles(found);
+		}
+
+		/// <summary>Validates every file first (nothing is touched if one is bad), backs up the current saves, then overwrites.</summary>
+		private int ImportSaveFiles(List<(string Name, byte[] Data)> incoming)
+		{
+			if (incoming.Count == 0)
+				throw new InstallException("No Celeste save files (0.celeste, settings.celeste...) were found there.");
+			foreach ((string name, byte[] data) in incoming)
+				ValidateSave(name, data);
+
+			string target = SavesDir(context);
+			Directory.CreateDirectory(target);
+			string[] current = Directory.GetFiles(target, "*.celeste");
+			if (current.Length > 0)
+			{
+				string backup = Path.Combine(UserDir(context), "Celeste", "ImportBackups", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+				Directory.CreateDirectory(backup);
+				foreach (string existing in current)
+					File.Copy(existing, Path.Combine(backup, Path.GetFileName(existing)), overwrite: true);
+				Log.Info(GameActivity.LogTag, $"[CelesteAndroid] saves: backed up {current.Length} file(s) to {backup}");
+			}
+			foreach ((string name, byte[] data) in incoming)
+			{
+				string path = Path.Combine(target, name.ToLowerInvariant());
+				File.WriteAllBytes(path + ".tmp", data);
+				File.Move(path + ".tmp", path, overwrite: true);
+			}
+			return incoming.Count;
+		}
+
+		private static void ValidateSave(string name, byte[] data)
+		{
+			string expected = name.Equals("settings.celeste", StringComparison.OrdinalIgnoreCase) ? "Settings" : "SaveData";
+			try
+			{
+				var settings = new System.Xml.XmlReaderSettings { DtdProcessing = System.Xml.DtdProcessing.Prohibit, XmlResolver = null };
+				using var reader = System.Xml.XmlReader.Create(new MemoryStream(data), settings);
+				var doc = System.Xml.Linq.XDocument.Load(reader);
+				if (doc.Root?.Name.LocalName != expected)
+					throw new InstallException($"{name} is not a Celeste {(expected == "Settings" ? "settings" : "save")} file.");
+			}
+			catch (System.Xml.XmlException)
+			{
+				throw new InstallException($"{name} is not a valid Celeste file, so nothing was imported.");
+			}
+		}
+
+		#endregion
 
 		private void CheckFnaBuild(bool hasFna)
 		{

@@ -14,26 +14,36 @@ using Color = Android.Graphics.Color;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// "Port settings": the port's options (renderer, frame cap, autoplay...) and the launcher-only actions: Check for updates and the
-	/// Steam account (name, Sign out, Switch account). Controller: up/down pick the row, left/right (or A) change the value, B goes back.
+	/// Config: Port settings (renderer, frame cap, autoplay...), Saves (import/export), Game files (check for updates, re-import, delete)
+	/// and the Steam account (name, Sign out, Switch account). These are launcher-only: the in-game PORT section has only the port settings.
+	/// Anything that needs the launcher's progress UI (imports, exports, delete) is handed back to it as a result.
+	/// Controller: up/down pick the row, left/right (or A) change the value, B goes back.
 	/// </summary>
 	[Activity(
-		Name = "org.devziyad.celeste.PortSettingsActivity",
+		Name = "org.devziyad.celeste.ConfigActivity",
 		Exported = false,
 		Theme = "@style/Theme.Celeste",
 		ScreenOrientation = ScreenOrientation.SensorLandscape,
 		ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout
 			| ConfigChanges.Keyboard | ConfigChanges.KeyboardHidden | ConfigChanges.Navigation)]
-	public class PortSettingsActivity : ControllerActivity
+	public class ConfigActivity : ControllerActivity
 	{
-		private const string LogTag = "CelestePortSettings";
+		private const string LogTag = "CelesteConfig";
+
+		/// <summary>Result extras: what the launcher should do (<see cref="ExtraAction"/>) and with which picked file or folder (the intent data).</summary>
+		public const string ExtraAction = "action";
+		public const string ActionImportSavesFolder = "import_saves_folder", ActionImportSavesZip = "import_saves_zip",
+			ActionExportSavesFolder = "export_saves_folder", ActionExportSavesZip = "export_saves_zip",
+			ActionReimportFolder = "reimport_folder", ActionReimportZip = "reimport_zip", ActionDelete = "delete";
+
+		private const int ReqImportSavesFolder = 11, ReqImportSavesZip = 12, ReqExportSavesFolder = 13, ReqExportSavesZip = 14, ReqReimportFolder = 15, ReqReimportZip = 16;
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
 
 		private readonly Dictionary<View, (PortSetting Setting, TextView Value)> rows = new();
 		private View? firstRow;
 		private TextView message = null!, accountText = null!;
-		private View signOutRow = null!, switchRow = null!;
+		private View signOutRow = null!, switchRow = null!, deleteRow = null!, reimportFolderRow = null!, reimportZipRow = null!;
 
 		protected override string Tag => LogTag;
 		protected override View? InitialFocus() => firstRow;
@@ -56,8 +66,60 @@ namespace CelesteAndroid
 			EnsureFocus();
 		}
 
+		protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
+		{
+			base.OnActivityResult(requestCode, resultCode, data);
+			Android.Net.Uri? uri = data?.Data;
+			if (resultCode != Result.Ok || uri == null) return;
+			string? action = requestCode switch
+			{
+				ReqImportSavesFolder => ActionImportSavesFolder,
+				ReqImportSavesZip => ActionImportSavesZip,
+				ReqExportSavesFolder => ActionExportSavesFolder,
+				ReqExportSavesZip => ActionExportSavesZip,
+				ReqReimportFolder => ActionReimportFolder,
+				ReqReimportZip => ActionReimportZip,
+				_ => null,
+			};
+			if (action != null)
+				Hand(action, uri);
+		}
+
+		/// <summary>Hands the work to the launcher (it owns the progress UI) and closes Config.</summary>
+		private void Hand(string action, Android.Net.Uri? uri = null)
+		{
+			var result = new Intent().PutExtra(ExtraAction, action);
+			if (uri != null) result.SetData(uri).AddFlags(ActivityFlags.GrantReadUriPermission | ActivityFlags.GrantWriteUriPermission);
+			SetResult(Result.Ok, result);
+			Finish();
+		}
+
+		private void PickFolder(int request) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), request);
+
+		private void PickZip(int request)
+		{
+			var intent = new Intent(Intent.ActionOpenDocument);
+			intent.AddCategory(Intent.CategoryOpenable);
+			intent.SetType("*/*");
+			intent.PutExtra(Intent.ExtraMimeTypes, new[] { "application/zip", "application/x-zip-compressed" });
+			StartActivityForResult(intent, request);
+		}
+
+		private void CreateZip(int request)
+		{
+			var intent = new Intent(Intent.ActionCreateDocument);
+			intent.AddCategory(Intent.CategoryOpenable);
+			intent.SetType("application/zip");
+			intent.PutExtra(Intent.ExtraTitle, "celeste-saves.zip");
+			StartActivityForResult(intent, request);
+		}
+
 		private void RefreshAccount()
 		{
+			bool installed = GameInstaller.IsInstalled(this);
+			deleteRow.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
+			reimportFolderRow.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
+			reimportZipRow.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
 			string? name = SteamAccount.Name(this);
 			accountText.Text = name == null ? "Not signed in to Steam" : "Signed in as " + name;
 			signOutRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
@@ -123,7 +185,7 @@ namespace CelesteAndroid
 			column.SetPadding(Dp(72), Dp(16), Dp(72), Dp(8));
 			root.AddView(column, new FrameLayout.LayoutParams(-1, -1));
 
-			var title = Text("Port settings", 26, Color.White, TypefaceStyle.Bold);
+			var title = Text("Config", 26, Color.White, TypefaceStyle.Bold);
 			title.LetterSpacing = 0.06f;
 			column.AddView(title, new LinearLayout.LayoutParams(-2, -2) { BottomMargin = Dp(6) });
 
@@ -133,22 +195,35 @@ namespace CelesteAndroid
 			// No fixed heights: rows are as tall as their text plus padding, with a margin so the focus outline is never clipped.
 			var list = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			list.SetPadding(Dp(4), Dp(4), Dp(4), Dp(4));
+
+			list.AddView(Section("Port settings"), SectionParams(first: true));
 			foreach (PortSetting setting in PortSettings.All)
 				list.AddView(Row(setting), RowParams());
+			list.AddView(Row(null), RowParams());
 
-			// Launcher-only: not part of the in-game PORT section.
-			list.AddView(Section("Steam"), new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(10), LeftMargin = Dp(16) });
-			accountText = Text("", 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
-			list.AddView(accountText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4), TopMargin = Dp(2) });
+			list.AddView(Section("Saves"), SectionParams());
+			list.AddView(ActionRow("Import saves from a folder", "ImportSavesFolder", () => PickFolder(ReqImportSavesFolder)), RowParams());
+			list.AddView(ActionRow("Import saves from a .zip", "ImportSavesZip", () => PickZip(ReqImportSavesZip)), RowParams());
+			list.AddView(ActionRow("Export saves to a folder", "ExportSavesFolder", () => PickFolder(ReqExportSavesFolder)), RowParams());
+			list.AddView(ActionRow("Export saves to a .zip", "ExportSavesZip", () => CreateZip(ReqExportSavesZip)), RowParams());
+
+			list.AddView(Section("Game files"), SectionParams());
 			list.AddView(ActionRow("Check for updates", "CheckForUpdates", () =>
 				StartActivity(new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraUpdate, true))), RowParams());
+			reimportFolderRow = ActionRow("Re-import from a folder", "ReimportFolder", () => PickFolder(ReqReimportFolder));
+			list.AddView(reimportFolderRow, RowParams());
+			reimportZipRow = ActionRow("Re-import from a .zip", "ReimportZip", () => PickZip(ReqReimportZip));
+			list.AddView(reimportZipRow, RowParams());
+			deleteRow = ActionRow("Delete game files", "DeleteGameFiles", () => Hand(ActionDelete));
+			list.AddView(deleteRow, RowParams());
+
+			list.AddView(Section("Steam account"), SectionParams());
+			accountText = Text("", 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			list.AddView(accountText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4), TopMargin = Dp(2) });
 			signOutRow = ActionRow("Sign out", "SignOut", () => SignOut(thenSignInAgain: false));
 			list.AddView(signOutRow, RowParams());
 			switchRow = ActionRow("Switch account", "SwitchAccount", () => SignOut(thenSignInAgain: true));
 			list.AddView(switchRow, RowParams());
-
-			var reset = Row(null);
-			list.AddView(reset, RowParams(topMargin: 10));
 
 			var scroll = new ScrollView(this) { VerticalScrollBarEnabled = false };
 			scroll.SetClipChildren(false);
@@ -173,7 +248,7 @@ namespace CelesteAndroid
 			string name = setting?.Key ?? "ResetDefaults";
 			MakeFocusable(row, name);
 
-			var label = Text(setting?.Label ?? "Reset to defaults", 17, setting == null ? Accent : Color.White, TypefaceStyle.Normal);
+			var label = Text(setting == null ? "Reset to defaults" : setting.Label + (setting.NextLaunch ? " (applies on the next Play)" : ""), 17, setting == null ? Accent : Color.White, TypefaceStyle.Normal);
 			row.AddView(label, new LinearLayout.LayoutParams(0, -2, 1f));
 			if (setting != null)
 			{
@@ -199,6 +274,9 @@ namespace CelesteAndroid
 
 		private LinearLayout.LayoutParams RowParams(int topMargin = 0) =>
 			new(-1, ViewGroup.LayoutParams.WrapContent) { TopMargin = Dp(2 + topMargin), BottomMargin = Dp(2) };
+
+		private LinearLayout.LayoutParams SectionParams(bool first = false) =>
+			new(-2, -2) { TopMargin = Dp(first ? 2 : 14), LeftMargin = Dp(16), BottomMargin = Dp(2) };
 
 		private TextView Section(string text)
 		{
