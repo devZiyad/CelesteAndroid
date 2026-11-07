@@ -10,6 +10,10 @@
 		<AssemblyName>CelesteDesktop</AssemblyName>
 	</PropertyGroup>
 	<ItemGroup>
+		<!-- Definição das opções do port e leitor/gravador do JSON (compartilhado com os patches e o app Android). -->
+		<Compile Include="..\Celeste.Android.Patches\PortSettingsCatalog.cs" Link="PortSettingsCatalog.cs" />
+	</ItemGroup>
+	<ItemGroup>
 		<ProjectReference Include="..\..\external\FNA\FNA.Core.csproj" />
 		<ProjectReference Include="..\Steamworks.NET\Steamworks.NET.csproj" />
 		<ProjectReference Include="..\Celeste.Patcher\Celeste.Patcher.csproj" />

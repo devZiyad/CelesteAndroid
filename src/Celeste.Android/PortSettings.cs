@@ -1,86 +1,99 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
 using Android.Content;
 using Android.Util;
 
 namespace CelesteAndroid
 {
-	/// <summary>Uma opção da tela "Port settings": rótulos para o usuário e valores que o jogo recebe.</summary>
-	public sealed record PortSetting(string Key, string Label, string[] Labels, string[] Values, int Default);
-
 	/// <summary>
-	/// Configurações do port. Ficam em SharedPreferences ("port") e chegam ao jogo pelo AppContext
-	/// ("CelesteAndroid.&lt;Key&gt;" = valor em texto; ver CelesteAndroid.PortConfig nos patches).
+	/// Configurações do port no lado do app. Ficam em <c>files/userdata/port-settings.json</c>, o MESMO arquivo que o
+	/// menu PORT do jogo lê e grava (ver <see cref="PortSettingsFile"/>), então o que muda em um aparece no outro.
+	/// Chegam ao jogo pelo AppContext ("CelesteAndroid.&lt;Key&gt;" = texto; ver CelesteAndroid.PortConfig nos patches).
 	/// </summary>
 	public static class PortSettings
 	{
-		public const string ContextPrefix = "CelesteAndroid.";
-		private const string PrefsName = "port";
+		public const string ContextPrefix = PortSettingsCatalog.ContextPrefix;
 
-		public static readonly PortSetting Renderer = new("Renderer", "Renderer",
-			new[] { "Vulkan", "OpenGL ES" }, new[] { "Vulkan", "OpenGL" }, 0);
-		// Só 30 e 60: a lógica do Celeste é fixa em 60 Hz, então um limite maior nunca produziria mais quadros.
-		public static readonly PortSetting FrameCap = new("FrameCap", "Frame cap",
-			new[] { "30", "60" }, new[] { "30", "60" }, 1);
-		// Índices gravados por versões antigas (30/60/90/120/ilimitado): qualquer valor acima de 60 vira 60.
-		private static readonly string[] LegacyFrameCapLabels = { "30", "60", "90", "120", "unlimited" };
-		public static readonly PortSetting VSync = new("VSync", "VSync",
-			new[] { "On", "Off" }, new[] { "true", "false" }, 0);
-		public static readonly PortSetting ResolutionScale = new("ResolutionScale", "Resolution scale",
-			new[] { "50%", "75%", "100%" }, new[] { "0.5", "0.75", "1" }, 2);
-		public static readonly PortSetting Overlay = new("Overlay", "Performance overlay",
-			new[] { "Off", "FPS", "FPS + frametime graph" }, new[] { "off", "fps", "graph" }, 0);
-		public static readonly PortSetting OverlayCorner = new("OverlayCorner", "Overlay corner",
-			new[] { "Top left", "Top right", "Bottom left", "Bottom right" },
-			new[] { "topleft", "topright", "bottomleft", "bottomright" }, 0);
-		public static readonly PortSetting ScreenFit = new("ScreenFit", "Screen fit",
-			new[] { "16:9 with side art", "16:9 with black bars", "Stretch to fill" },
-			new[] { "sideart", "blackbars", "stretch" }, 0);
-		public static readonly PortSetting IntegerScaling = new("IntegerScaling", "Integer scaling",
-			new[] { "Off", "On" }, new[] { "false", "true" }, 0);
+		public static readonly PortSetting Renderer = PortSettingsCatalog.Renderer;
+		public static readonly PortSetting FrameCap = PortSettingsCatalog.FrameCap;
+		public static readonly PortSetting[] All = PortSettingsCatalog.All;
 
-		public static readonly PortSetting[] All =
+		// Índices gravados em SharedPreferences ("port") por versões anteriores (importados uma vez para o JSON).
+		private static readonly string[] LegacyFrameCap = { "30", "60", "90", "120", "unlimited" };
+
+		public static string FilePath(Context context) => Path.Combine(GameInstaller.UserDir(context), PortSettingsCatalog.FileName);
+
+		private static Dictionary<string, string> Load(Context context)
 		{
-			Renderer, FrameCap, VSync, ResolutionScale, Overlay, OverlayCorner, ScreenFit, IntegerScaling,
-		};
-
-		private static ISharedPreferences Prefs(Context context) =>
-			context.GetSharedPreferences(PrefsName, FileCreationMode.Private)!;
-
-		public static int GetIndex(Context context, PortSetting setting)
-		{
-			int i = Prefs(context).GetInt(setting.Key, setting.Default);
-			return i >= 0 && i < setting.Values.Length ? i : setting.Default;
+			string path = FilePath(context);
+			if (!File.Exists(path))
+				ImportLegacyPrefs(context, path);
+			return PortSettingsFile.Read(path);
 		}
 
-		public static void SetIndex(Context context, PortSetting setting, int index) =>
-			Prefs(context).Edit()!.PutInt(setting.Key, ((index % setting.Values.Length) + setting.Values.Length) % setting.Values.Length)!.Apply();
+		private static void ImportLegacyPrefs(Context context, string path)
+		{
+			ISharedPreferences prefs = context.GetSharedPreferences("port", FileCreationMode.Private)!;
+			var values = new Dictionary<string, string>();
+			foreach (PortSetting s in All)
+			{
+				if (!prefs.Contains(s.Key)) continue;
+				int i = prefs.GetInt(s.Key, s.Default);
+				string[] source = s == FrameCap ? LegacyFrameCap : s.Values;
+				if (i >= 0 && i < source.Length)
+					values[s.Key] = source[i];
+			}
+			if (values.Count == 0) return;
+			PortSettingsFile.Write(path, values);
+			prefs.Edit()!.Clear()!.Apply();
+			Log.Info("CelesteAndroid", $"[CelesteAndroid] host imported {values.Count} saved settings from SharedPreferences into {PortSettingsCatalog.FileName}");
+		}
+
+		public static int GetIndex(Context context, PortSetting setting) =>
+			setting.IndexOf(Load(context).GetValueOrDefault(setting.Key));
+
+		public static void SetIndex(Context context, PortSetting setting, int index)
+		{
+			Dictionary<string, string> values = Load(context);
+			int n = setting.Values.Length;
+			values[setting.Key] = setting.Values[((index % n) + n) % n];
+			PortSettingsFile.Write(FilePath(context), values);
+		}
 
 		public static string GetValue(Context context, PortSetting setting) => setting.Values[GetIndex(context, setting)];
 
-		/// <summary>Valores gravados que deixaram de existir (limite de quadros &gt; 60) passam a 60.</summary>
-		private static string? MigrateFrameCap(Context context)
+		public static void Reset(Context context)
 		{
-			ISharedPreferences prefs = Prefs(context);
-			int saved = prefs.GetInt(FrameCap.Key, FrameCap.Default);
-			if (saved < FrameCap.Values.Length || saved >= LegacyFrameCapLabels.Length)
-				return null;
-			prefs.Edit()!.PutInt(FrameCap.Key, FrameCap.Default)!.Apply();
-			return $"saved {LegacyFrameCapLabels[saved]} migrated to {FrameCap.Values[FrameCap.Default]}";
+			string path = FilePath(context);
+			if (File.Exists(path)) File.Delete(path);
 		}
 
-		public static void Reset(Context context) => Prefs(context).Edit()!.Clear()!.Apply();
-
-		/// <summary>Publica todas as opções no AppContext para o Celeste.dll patcheado ler.</summary>
+		/// <summary>
+		/// Publica todas as opções no AppContext para o Celeste.dll patcheado ler, junto com o caminho do arquivo
+		/// (o menu do jogo grava nele). Valores que não existem mais (ex.: limite de quadros &gt; 60) viram o padrão.
+		/// </summary>
 		public static void ApplyToAppContext(Context context)
 		{
-			string? migrated = MigrateFrameCap(context);
+			Dictionary<string, string> values = Load(context);
+			bool fix = false;
 			foreach (PortSetting s in All)
 			{
-				string value = GetValue(context, s);
+				values.TryGetValue(s.Key, out string? raw);
+				string value = s.Values[s.IndexOf(raw)];
+				string note = "";
+				if (raw != null && !string.Equals(raw, value, StringComparison.OrdinalIgnoreCase))
+				{
+					note = $" (saved {raw} migrated to {value})";
+					values[s.Key] = value;
+					fix = true;
+				}
 				AppContext.SetData(ContextPrefix + s.Key, value);
-				string note = s == FrameCap && migrated != null ? $" ({migrated})" : "";
 				Log.Info("CelesteAndroid", $"[CelesteAndroid] host setting {s.Key}={value}{note}");
 			}
+			if (fix)
+				PortSettingsFile.Write(FilePath(context), values);
+			AppContext.SetData(PortSettingsCatalog.FileKey, FilePath(context));
 		}
 	}
 }

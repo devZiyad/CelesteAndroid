@@ -42,6 +42,10 @@
 		<AndroidKeyStore>true</AndroidKeyStore>
 	</PropertyGroup>
 	<ItemGroup>
+		<!-- Definição das opções do port e leitor/gravador do JSON: o mesmo arquivo dos patches (menu PORT do jogo). -->
+		<Compile Include="..\Celeste.Android.Patches\PortSettingsCatalog.cs" Link="PortSettingsCatalog.cs" />
+	</ItemGroup>
+	<ItemGroup>
 		<!-- Java do SDL3 (SDLActivity etc.), compilado no APK e com bindings C# para subclassificar. -->
 		<AndroidJavaSource Include="$(RepoRoot)external\SDL\android-project\app\src\main\java\org\libsdl\app\*.java" Bind="true" />
 		<TransformFile Include="Transforms\Metadata.xml" />

@@ -33,6 +33,37 @@ namespace CelesteAndroid
 			}
 		}
 
+		/// <summary>Texto atual de uma opção (AppContext) ou o padrão do catálogo.</summary>
+		public static string Get(PortSetting setting) => setting.Values[setting.IndexOf(Raw(setting.Key))];
+
+		/// <summary>
+		/// Muda uma opção em tempo de execução (menu PORT do jogo): atualiza o AppContext (valendo já no próximo quadro)
+		/// e grava o arquivo compartilhado com o launcher e com o host desktop.
+		/// </summary>
+		public static void Set(PortSetting setting, string value)
+		{
+			AppContext.SetData(Prefix + setting.Key, value);
+			string? file = AppContext.GetData(PortSettingsCatalog.FileKey) as string;
+			if (file == null)
+			{
+				return;
+			}
+			var values = new System.Collections.Generic.Dictionary<string, string>();
+			foreach (PortSetting s in PortSettingsCatalog.All)
+			{
+				values[s.Key] = Get(s);
+			}
+			try
+			{
+				PortSettingsFile.Write(file, values);
+				Console.WriteLine("[CelesteAndroid] setting " + setting.Key.ToLowerInvariant() + "=" + value + " (changed in game, saved to " + PortSettingsCatalog.FileName + ")");
+			}
+			catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+			{
+				Console.WriteLine("[CelesteAndroid] could not save " + file + ": " + e.Message);
+			}
+		}
+
 		public static bool VSync => ParseBool(Raw("VSync"), true);
 
 		public static float ResolutionScale

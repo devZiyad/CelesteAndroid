@@ -1,16 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text.Json;
 
 namespace CelesteAndroid.Desktop
 {
 	/// <summary>
-	/// Opções do port no host desktop, as mesmas da tela "Port settings" do Android. Fontes (a última vence):
-	/// <c>port-settings.json</c> ao lado do host (ou <c>--settings arquivo</c>) e flags de linha de comando.
-	/// Chaves do JSON: renderer, frameCap, vsync, resolutionScale, overlay, overlayCorner, screenFit, integerScaling.
-	/// Flags: --renderer vulkan|opengl, --frame-cap 30|60 (higher values become 60), --vsync on|off, --res-scale 0.5..1,
+	/// Opções do port no host desktop, as mesmas da tela "Port settings" do launcher e do menu PORT do jogo.
+	/// Fontes (a última vence): <c>port-settings.json</c> ao lado do host (ou <c>--settings arquivo</c>) e flags.
+	/// O menu PORT do jogo grava de volta nesse mesmo arquivo.
+	/// Chaves do JSON: Renderer, FrameCap, VSync, ResolutionScale, Overlay, OverlayCorner, ScreenFit, IntegerScaling.
+	/// Flags: --renderer vulkan|opengl, --frame-cap 30|60 (maiores viram 60), --vsync on|off, --res-scale 0.5..1,
 	/// --overlay off|fps|graph, --corner topleft|topright|bottomleft|bottomright, --screen-fit sideart|blackbars|stretch,
 	/// --integer-scaling on|off.
 	/// </summary>
@@ -25,28 +24,12 @@ namespace CelesteAndroid.Desktop
 		/// <summary>Publica as opções no AppContext e devolve os argumentos que sobraram (para o Main do Celeste).</summary>
 		public static string[] Apply(string[] args, string hostDir)
 		{
-			var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-			string? file = null;
+			string file = Path.Combine(hostDir, PortSettingsCatalog.FileName);
 			int s = Array.IndexOf(args, "--settings");
 			if (s >= 0 && s + 1 < args.Length)
-				file = args[s + 1];
-			else if (File.Exists(Path.Combine(hostDir, "port-settings.json")))
-				file = Path.Combine(hostDir, "port-settings.json");
-			if (file != null)
-			{
-				using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(file));
-				foreach (JsonProperty p in doc.RootElement.EnumerateObject())
-				{
-					string text = p.Value.ValueKind switch
-					{
-						JsonValueKind.True => "true",
-						JsonValueKind.False => "false",
-						_ => p.Value.ToString(),
-					};
-					values[p.Name] = text;
-				}
-			}
+				file = Path.GetFullPath(args[s + 1]);
+
+			Dictionary<string, string> values = PortSettingsFile.Read(file);
 
 			var rest = new List<string>();
 			for (int i = 0; i < args.Length; i++)
@@ -58,14 +41,11 @@ namespace CelesteAndroid.Desktop
 					rest.Add(args[i]);
 			}
 
-			foreach ((string key, string value) in values.Select(kv => (Normalize(kv.Key), kv.Value)))
-				AppContext.SetData(PortPrefix + key, value);
+			foreach ((string key, string value) in values)
+				AppContext.SetData(PortSettingsCatalog.ContextPrefix + key, value);
+			// O menu PORT do jogo grava aqui (o arquivo é criado na primeira mudança).
+			AppContext.SetData(PortSettingsCatalog.FileKey, file);
 			return rest.ToArray();
 		}
-
-		private const string PortPrefix = "CelesteAndroid.";
-
-		/// <summary>Aceita camelCase do JSON ("frameCap") e o nome canônico ("FrameCap").</summary>
-		private static string Normalize(string key) => key.Length == 0 ? key : char.ToUpperInvariant(key[0]) + key[1..];
 	}
 }
