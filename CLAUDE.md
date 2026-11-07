@@ -54,3 +54,6 @@ See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
 
 ## Phone connectivity
 - Never disable the phone's Wi-Fi or mobile data (`svc wifi/data disable`, airplane mode, ...): wireless adb is the only link and it may not come back. For offline checks, block only the app's network (per-app rule) or have the user do the offline step.
+
+## Language
+- All code comments, docs, log messages and commit messages must be in English. When you edit a file that still has Portuguese comments, translate the comments in the parts you touch.
