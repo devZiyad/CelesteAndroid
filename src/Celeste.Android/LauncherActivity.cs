@@ -83,6 +83,7 @@ namespace CelesteAndroid
 			base.OnResume();
 			HideSystemBars();
 			RefreshState();
+			LogDataInventory();
 
 			// Desenvolvimento: arquivos já copiados por scripts/deploy-android.sh; só patch + fundo.
 			// adb shell am start -n org.devziyad.celeste/.LauncherActivity --ez repatch true
@@ -106,6 +107,29 @@ namespace CelesteAndroid
 			{
 				RunInstall(installer => installer.ImportEmbedded());
 			}
+		}
+
+		/// <summary>Registra o tamanho dos dados do app (files/ e shared_prefs/): prova, no logcat, que um deploy não os apagou.</summary>
+		private void LogDataInventory()
+		{
+			string? filesDir = FilesDir?.AbsolutePath;
+			string? prefsDir = filesDir == null ? null : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(filesDir)!, "shared_prefs");
+			System.Threading.Tasks.Task.Run(() =>
+			{
+				static (int Files, long Bytes) Walk(string? dir)
+				{
+					if (dir == null || !Directory.Exists(dir)) return (0, 0);
+					int n = 0; long b = 0;
+					foreach (string f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+					{
+						n++;
+						try { b += new FileInfo(f).Length; } catch (IOException) { }
+					}
+					return (n, b);
+				}
+				var files = Walk(filesDir); var prefs = Walk(prefsDir);
+				Log.Info(LogTag, $"data: files/ files={files.Files} bytes={files.Bytes}; shared_prefs/ files={prefs.Files} bytes={prefs.Bytes}");
+			});
 		}
 
 		protected override string Tag => LogTag;

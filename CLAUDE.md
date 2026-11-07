@@ -17,6 +17,7 @@ Builds and runs entirely on Linux (CachyOS, fish shell). No Windows, no PowerShe
 ## Device
 - Galaxy S23 Ultra (Adreno 740) over wireless adb. Serial is in `$ANDROID_SERIAL`; always use it (`adb -s $ANDROID_SERIAL ...`).
 - Packages: release `org.devziyad.celeste` ("Celeste (dev)"), Debug `org.devziyad.celeste.debug` ("Celeste (debug)"); both install side by side and alongside the original app. `scripts/deploy-android.sh` targets the debug ID by default, `--release` targets the release ID. Game process: `<package>:game`. Activity class names stay `org.devziyad.celeste.*` in both (use `pkg/org.devziyad.celeste.LauncherActivity`, not `.LauncherActivity`).
+- `scripts/deploy-android.sh` never uninstalls and installs with `adb install -r` (updates in place, keeps game files and saves). It checks the app kept its uid/firstInstallTime and, for the debug build, its file count/size. If an install needs the old app removed (signature mismatch, downgrade) it stops and says so; never run `adb uninstall` on these packages without backing up `files/userdata` first (`adb exec-out run-as <pkg> tar -cf - files/userdata`, debug build only).
 
 ## Signing
 - Release signing: `~/.celeste-android/release.jks`, alias `celeste`, password in `$CELESTE_KEYSTORE_PASS`. Never print or write the password.
