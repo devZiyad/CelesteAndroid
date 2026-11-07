@@ -19,9 +19,9 @@ namespace CelesteAndroid.Steam
 
 	public sealed record InstallResult(int Files, long Bytes, int SkippedFiles, long SkippedBytes, RemovalReport Removed);
 
-	public sealed class InstallException : Exception
+	public sealed class DepotInstallException : Exception
 	{
-		public InstallException(string message) : base(message) { }
+		public DepotInstallException(string message) : base(message) { }
 	}
 
 	/// <summary>
@@ -72,7 +72,7 @@ namespace CelesteAndroid.Steam
 					if (bad.Count == 0)
 						break;
 					if (round == 1)
-						throw new InstallException($"{bad.Count} file(s) failed verification, e.g. {bad[0].Path}.");
+						throw new DepotInstallException($"{bad.Count} file(s) failed verification, e.g. {bad[0].Path}.");
 				}
 			}
 			finally
@@ -83,7 +83,7 @@ namespace CelesteAndroid.Steam
 			removed = Merge(removed, StaleFileRemover.Remove(root, selection.NeededPaths));
 			(int files, long bytes) = Measure();
 			if (files != selection.Needed.Count || bytes != selection.NeededBytes)
-				throw new InstallException($"Installed {files} files / {bytes} bytes, expected {selection.Needed.Count} / {selection.NeededBytes}.");
+				throw new DepotInstallException($"Installed {files} files / {bytes} bytes, expected {selection.Needed.Count} / {selection.NeededBytes}.");
 
 			ResumeState.Delete(stateFile); // verificado: nada de estado de retomada, cache ou temporário sobra
 			progress.Phase("Done");
@@ -147,7 +147,7 @@ namespace CelesteAndroid.Steam
 				{
 					int written = await DownloadWithRetryAsync(chunk, buffer, token).ConfigureAwait(false);
 					if (written != chunk.UncompressedLength)
-						throw new InstallException($"Chunk of {file.Path} came back with {written} bytes, expected {chunk.UncompressedLength}.");
+						throw new DepotInstallException($"Chunk of {file.Path} came back with {written} bytes, expected {chunk.UncompressedLength}.");
 					using Microsoft.Win32.SafeHandles.SafeFileHandle handle = File.OpenHandle(PathOf(file), FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
 					RandomAccess.Write(handle, new ReadOnlySpan<byte>(buffer, 0, written), chunk.Offset);
 				}
