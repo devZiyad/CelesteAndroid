@@ -13,6 +13,13 @@ namespace CelesteAndroid
 		public const string PlatformKey = "CelesteAndroid.Platform";
 		public const string PrefPathKey = "CelesteAndroid.PrefPath";
 		public const string BackgroundPathKey = "CelesteAndroid.BackgroundPath";
+		public const string HostKey = "CelesteAndroid.Host";
+
+		/// <summary>"android" (app) ou "desktop" (host Linux de testes); o padrão é Android.</summary>
+		public static string Host => AppContext.GetData(HostKey) as string ?? "android";
+
+		/// <summary>No desktop o menu de vídeo do Celeste (Fullscreen/Window Scale) continua como no original.</summary>
+		public static bool IsAndroid => !string.Equals(Host, "desktop", StringComparison.OrdinalIgnoreCase);
 
 		public static string Platform => AppContext.GetData(PlatformKey) as string ?? "Android";
 

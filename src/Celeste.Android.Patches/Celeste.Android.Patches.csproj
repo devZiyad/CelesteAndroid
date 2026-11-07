@@ -5,6 +5,8 @@
 		<AssemblyName>Celeste.Android.mm</AssemblyName>
 		<RootNamespace>CelesteAndroid</RootNamespace>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<!-- Padrões do MonoMod: extern orig_*, campos ignorados e null em assinaturas copiadas do jogo. -->
+		<NoWarn>$(NoWarn);CS0626;CS0414;CS8625</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>
 		<PackageReference Include="MonoMod.Patcher" Version="25.0.1" PrivateAssets="all" ExcludeAssets="runtime" />
