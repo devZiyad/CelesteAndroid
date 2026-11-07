@@ -407,8 +407,15 @@ namespace CelesteAndroid.Steam
 			try
 			{
 				var unified = client.GetHandler<SteamUnifiedMessages>()!;
-				var list = await unified.SendMessage<CAuthentication_RefreshToken_Enumerate_Request, CAuthentication_RefreshToken_Enumerate_Response>(
-					"Authentication.EnumerateTokens#1", new CAuthentication_RefreshToken_Enumerate_Request()).ToTask().ConfigureAwait(false);
+				// Steam may never answer these (it only serves them on some sessions): do not hold up signing out for more than a few seconds.
+				var listJob = unified.SendMessage<CAuthentication_RefreshToken_Enumerate_Request, CAuthentication_RefreshToken_Enumerate_Response>(
+					"Authentication.EnumerateTokens#1", new CAuthentication_RefreshToken_Enumerate_Request()).ToTask();
+				if (await Task.WhenAny(listJob, Task.Delay(TimeSpan.FromSeconds(8), ct)).ConfigureAwait(false) != listJob)
+				{
+					log("steam: Steam did not answer the refresh token list in time");
+					return false;
+				}
+				var list = await listJob.ConfigureAwait(false);
 				if (list.Result != EResult.OK)
 				{
 					log($"steam: could not list the refresh tokens ({list.Result})");
@@ -423,13 +430,19 @@ namespace CelesteAndroid.Steam
 					log("steam: no refresh token of this app was found to revoke");
 					return false;
 				}
-				var revoke = await unified.SendMessage<CAuthentication_RefreshToken_Revoke_Request, CAuthentication_RefreshToken_Revoke_Response>(
+				var revokeJob = unified.SendMessage<CAuthentication_RefreshToken_Revoke_Request, CAuthentication_RefreshToken_Revoke_Response>(
 					"Authentication.RevokeRefreshToken#1", new CAuthentication_RefreshToken_Revoke_Request
 					{
 						token_id = ours.token_id,
 						steamid = client.SteamID!.ConvertToUInt64(),
 						revoke_action = EAuthTokenRevokeAction.k_EAuthTokenRevokePermanent,
-					}).ToTask().ConfigureAwait(false);
+					}).ToTask();
+				if (await Task.WhenAny(revokeJob, Task.Delay(TimeSpan.FromSeconds(8), ct)).ConfigureAwait(false) != revokeJob)
+				{
+					log("steam: Steam did not answer the revoke in time");
+					return false;
+				}
+				var revoke = await revokeJob.ConfigureAwait(false);
 				log($"steam: refresh token revoke: {revoke.Result}");
 				return revoke.Result == EResult.OK;
 			}
