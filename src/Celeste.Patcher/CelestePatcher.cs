@@ -11,9 +11,9 @@ namespace CelesteAndroid.Patcher
 	/// </summary>
 	public static class CelestePatcher
 	{
-		/// <param name="celesteExe">Celeste.exe original (build FNA).</param>
+		/// <param name="celesteExe">The original Celeste.exe (FNA build).</param>
 		/// <param name="modAssembly">Celeste.Android.mm.dll.</param>
-		/// <param name="outputDll">Destino do Celeste.dll patcheado.</param>
+		/// <param name="outputDll">Where to write the patched Celeste.dll.</param>
 		/// <param name="dependencyDirs">Where to find FNA.dll, Steamworks.NET.dll etc. (ours, not the game's).</param>
 		public static void Patch(string celesteExe, string modAssembly, string outputDll, IEnumerable<string> dependencyDirs, Action<string>? log = null)
 		{
@@ -43,7 +43,7 @@ namespace CelesteAndroid.Patcher
 			module.Architecture = TargetArchitecture.I386;
 
 			modder.Write();
-			log($"Celeste patcheado: {outputDll}");
+			log($"Patched Celeste: {outputDll}");
 		}
 
 		private sealed class LoggingModder(Action<string> log) : MonoModder

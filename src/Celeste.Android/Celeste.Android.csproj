@@ -14,7 +14,7 @@
 		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
 		<AndroidPackageFormat>apk</AndroidPackageFormat>
 		<!-- Celeste (loaded at runtime) uses reflection and XmlSerializer over the whole framework,
-		     inclusive as fachadas do .NET Framework (mscorlib, System.Xml): nada pode ser removido. -->
+		     including the .NET Framework facades (mscorlib, System.Xml): nothing can be trimmed. -->
 		<PublishTrimmed>false</PublishTrimmed>
 		<AndroidLinkMode>None</AndroidLinkMode>
 		<!-- AOT requires trimming; the game (Celeste.dll) is loaded at runtime and runs on the JIT anyway. -->

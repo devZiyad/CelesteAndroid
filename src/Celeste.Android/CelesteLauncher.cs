@@ -8,14 +8,14 @@ using Android.Util;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Carrega o Celeste.dll patcheado e chama o Main original, com o mesmo contrato do host desktop.
+	/// Loads the patched Celeste.dll and calls the original Main, with the same contract as the desktop host.
 	/// </summary>
 	public static class CelesteLauncher
 	{
 		public static void Run(Context context)
 		{
 			string gameDir = GameInstaller.GameDir(context);
-			Log.Info(GameActivity.LogTag, $"Iniciando Celeste de {gameDir}");
+			Log.Info(GameActivity.LogTag, $"Starting Celeste from {gameDir}");
 
 			// See CelesteAndroid.HostConfig (Celeste.Android.Patches).
 			AppContext.SetData("CelesteAndroid.Platform", "Android");
