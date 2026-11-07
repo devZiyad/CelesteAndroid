@@ -1,0 +1,38 @@
+# CelesteAndroid — project facts
+
+Builds and runs entirely on Linux (CachyOS, fish shell). No Windows, no PowerShell. Give the user shell commands in **fish** syntax (`set -x VAR value`, not `export`).
+
+## Game files (never modify, never commit)
+- Vanilla game files live in `Celeste/` at the repo root: `Celeste.exe`, `FNA.dll`, `Content/`, `lib64/`. Gitignored.
+- FMOD 1.10 Linux libs for the desktop host are in `Celeste/lib64` and are versioned (`libfmod.so.10`, `libfmodstudio.so.10`). The desktop build copies them next to the binary as `libfmod.so` / `libfmodstudio.so`.
+- FMOD Android libs (`libfmod.so`, `libfmodstudio.so`, `fmod.jar`) are in `fmod/libs/android-arm64` (gitignored).
+- The user's Everest-modded Steam install at `/mnt/games/SteamLibrary/steamapps/common/Celeste` is a **read-only reference**.
+- Game files, FMOD libs and keystores must never be committed.
+
+## Toolchain
+- Before Android builds: `JAVA_HOME=~/.sdkman/candidates/java/17.0.20-tem`, `ANDROID_HOME=~/Android/Sdk`, `ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.3.13750724` (scripts default to these via `scripts/_env.sh`).
+- .NET 10 SDK is in `~/.dotnet` (with the `android` workload); `scripts/_env.sh` puts it on PATH.
+- CMake is 4.x: pass `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` if a submodule declares an older minimum (the native build script already does).
+
+## Device
+- Galaxy S23 Ultra (Adreno 740) over wireless adb. Serial is in `$ANDROID_SERIAL`; always use it (`adb -s $ANDROID_SERIAL ...`).
+- Package: `org.devziyad.celeste`, label "Celeste (dev)" (installs alongside the original app). Game process: `org.devziyad.celeste:game`.
+
+## Signing
+- Release signing: `~/.celeste-android/release.jks`, alias `celeste`, password in `$CELESTE_KEYSTORE_PASS`. Never print or write the password.
+
+## Scripts (`scripts/`)
+- `build-natives-android.sh` — SDL3/FNA3D/FAudio for arm64-v8a → `natives/android-arm64`
+- `fetch-fnalibs.sh` — prebuilt linux-x64 fnalibs → `natives/linux-x64` (desktop host)
+- `build-release.sh` — signed release APK → `out/`
+- `deploy-android.sh` — patch, install, push files, launch on the phone
+- `generate-game-art.sh` — icon/launcher art from the user's files (ImageMagick)
+
+See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
+
+## Git workflow
+- Work on a branch named `stage-N` created from `main` (current stage: `stage-0`). `main` stays at `origin/main`.
+- Small, focused commits, one per working change, each only after it builds and its check passes. Never commit a broken build.
+- Conventional, imperative commit messages (`feat:`, `fix:`, `docs:`, `build:`...) with a short "why" body when not obvious.
+- Never rewrite pushed history or force-push.
+- Push the branch to origin when the goal is met. Never merge into `main` — the user merges after testing.
