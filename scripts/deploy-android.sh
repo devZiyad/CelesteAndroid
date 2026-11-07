@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 # Device dev loop: patches Celeste, builds/installs the APK and pushes the files.
 # Usage: scripts/deploy-android.sh [--content] [--no-launch] [--release]
-#   --content    also pushes the game's Content folder (1 GB; first time or when it changes)
+#   --content    also pushes Celeste.exe and the Content folder (1 GB; first time, new package ID, or when it changes)
+#   --play       launch straight into the game instead of stopping at the launcher
 #   --release    install out/CelesteAndroid-<version>.apk (org.devziyad.celeste, release-signed) instead of the
 #                debug build (org.devziyad.celeste.debug, "Celeste (debug)"); both can be installed together
 # Uses the device in $ANDROID_SERIAL.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
 
-CONTENT=0; LAUNCH=1; RELEASE=0
+CONTENT=0; LAUNCH=1; RELEASE=0; PLAY=0
 for a in "$@"; do
 	case "$a" in
 		--content) CONTENT=1 ;;
 		--no-launch) LAUNCH=0 ;;
 		--release) RELEASE=1 ;;
+		--play) PLAY=1 ;;
 		*) die "unknown argument: $a" ;;
 	esac
 done
@@ -56,6 +58,7 @@ TMP=/data/local/tmp/celeste
 if [ "$CONTENT" = 1 ]; then
 	"${ADB[@]}" shell "mkdir -p $TMP/Celeste"
 	"${ADB[@]}" push "$ROOT/Celeste/Content" "$TMP/Celeste/"
+	"${ADB[@]}" push "$ROOT/Celeste/Celeste.exe" "$TMP/Celeste/"
 fi
 if "${ADB[@]}" shell "run-as $PKG true" >/dev/null 2>&1; then
 	"${ADB[@]}" shell "chmod -R a+rX $TMP && run-as $PKG sh -c 'mkdir -p files && cp -r $TMP/* files/' && rm -rf $TMP"
@@ -65,5 +68,7 @@ fi
 
 if [ "$LAUNCH" = 1 ]; then
 	"${ADB[@]}" logcat -c
-	"${ADB[@]}" shell am start -n "$PKG/org.devziyad.celeste.LauncherActivity"
+	EXTRA=()
+	[ "$PLAY" = 1 ] && EXTRA=(--ez autoplay true)
+	"${ADB[@]}" shell am start -n "$PKG/org.devziyad.celeste.LauncherActivity" "${EXTRA[@]}"
 fi
