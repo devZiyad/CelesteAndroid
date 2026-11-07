@@ -1,3 +1,4 @@
+#pragma warning disable CS0626 // extern sem atributo: o MonoMod troca por orig_*
 using System;
 using System.Collections;
 using System.Reflection;
@@ -10,14 +11,24 @@ namespace Celeste
 	{
 		public static extern TextMenu orig_Create(bool inGame = false, EventInstance snapshot = null);
 
-		/// <summary>No Android o jogo roda sempre em tela cheia nativa: esconde "Fullscreen" e "Window Scale" do menu Video.</summary>
+		/// <summary>
+		/// Gancho aditivo: o menu de opções original é montado por orig_Create (sem reescrevê-lo) e só depois
+		/// (1) esconde "Fullscreen"/"Window Scale" no Android (o jogo roda sempre em tela cheia nativa) e
+		/// (2) acrescenta a seção PORT no fim. Convive com os ganchos do Everest, que também chamam orig_Create.
+		/// </summary>
 		public static TextMenu Create(bool inGame = false, EventInstance snapshot = null)
 		{
 			TextMenu menu = orig_Create(inGame, snapshot);
-			if (!HostConfig.IsAndroid)
+			if (HostConfig.IsAndroid)
 			{
-				return menu;
+				HideFullscreenOptions(menu);
 			}
+			AddPortSection(menu);
+			return menu;
+		}
+
+		private static void HideFullscreenOptions(TextMenu menu)
+		{
 			string fullscreen = Dialog.Clean("options_fullscreen");
 			string window = Dialog.Clean("options_window");
 			var items = (IEnumerable)typeof(TextMenu).GetField("items", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(menu)!;
@@ -35,7 +46,46 @@ namespace Celeste
 				}
 			}
 			menu.RecalculateSize();
-			return menu;
+		}
+
+		// Ordem do menu: o que vale na hora primeiro, o que só vale na próxima inicialização por último.
+		private static readonly PortSetting[] MenuOrder =
+		{
+			PortSettingsCatalog.Overlay, PortSettingsCatalog.OverlayCorner, PortSettingsCatalog.ScreenFit,
+			PortSettingsCatalog.IntegerScaling, PortSettingsCatalog.FrameCap, PortSettingsCatalog.VSync,
+			PortSettingsCatalog.ResolutionScale, PortSettingsCatalog.Renderer,
+		};
+
+		private static void AddPortSection(TextMenu menu)
+		{
+			menu.Add(new TextMenu.SubHeader("PORT"));
+			foreach (PortSetting setting in MenuOrder)
+			{
+				menu.Add(CreateItem(setting));
+			}
+			// Igual ao fim do menu original: com mais itens que a tela, começa rolado para a seleção.
+			if (menu.Height > menu.ScrollableMinSize)
+			{
+				menu.Position.Y = menu.ScrollTargetY;
+			}
+		}
+
+		private static TextMenu.Item CreateItem(PortSetting setting)
+		{
+			string label = setting.Label + (setting.NextLaunch ? " (applies on next launch)" : "");
+			int current = setting.IndexOf(PortConfig.Get(setting));
+			void Apply(int index)
+			{
+				PortConfig.Set(setting, setting.Values[index]);
+				PortLive.Apply(setting);
+			}
+
+			int on = Array.IndexOf(setting.Labels, "On"), off = Array.IndexOf(setting.Labels, "Off");
+			if (setting.Labels.Length == 2 && on >= 0 && off >= 0)
+			{
+				return new TextMenu.OnOff(label, current == on).Change(isOn => Apply(isOn ? on : off));
+			}
+			return new TextMenu.Slider(label, i => setting.Labels[i], 0, setting.Labels.Length - 1, current).Change(Apply);
 		}
 	}
 }
