@@ -19,6 +19,7 @@ namespace Celeste
 		protected override void Initialize()
 		{
 			orig_Initialize();
+			PortLifecycle.Install();
 
 			// The port's VSync (overrides the game's Settings value at startup; the video menu still applies afterwards).
 			bool vsync = PortConfig.VSync;
