@@ -25,10 +25,9 @@ using Uri = Android.Net.Uri;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Installs the game from Steam: sign-in on the device itself (QR approved in the Steam app on the same phone, or username/password with
-	/// push approval and a Steam Guard code as the last resort), checks ownership of Celeste and downloads Linux depot 504233
-	/// (public branch) straight into the final folder, with controller-navigable progress. Then hands Celeste.exe and Content/ to
-	/// GameInstaller's patch step. Never logs or stores the password; only the refresh token, encrypted in the Keystore.
+	/// The Steam install screen: sign-in (username/password with Steam Guard, or a QR code scanned from another device) and then the live
+	/// progress of the foreground <see cref="InstallService"/>, which does the download, the checks and the patching. Never logs or
+	/// stores the password; only the refresh token, encrypted in the Keystore.
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.SteamActivity",
@@ -58,14 +57,13 @@ namespace CelesteAndroid
 		private LinearLayout qrGroup = null!, credentialsGroup = null!, progressGroup = null!, actions = null!;
 		private ImageView qrImage = null!;
 		private ProgressBar bar = null!;
-		private TextView openSteamQr = null!, signInButton = null!, openSteamCredentials = null!, submitCode = null!, cancelButton = null!, retryButton = null!;
-		private TextView useCredentials = null!, backToQr = null!, enterCode = null!;
+		private TextView signInButton = null!, openSteamCredentials = null!, submitCode = null!, cancelButton = null!, retryButton = null!;
+		private TextView backToCredentials = null!, useQr = null!, enterCode = null!;
 		private EditText userField = null!, passField = null!, codeField = null!;
 
 		private CancellationTokenSource cts = new();
 		private SteamSession? session;
-		private string? challengeUrl;
-		private bool codeIsEmail;
+				private bool codeIsEmail;
 		private TaskCompletionSource<bool>? switchToCredentials, switchToQr;
 		private TaskCompletionSource<(string User, string Pass)>? credentialsSubmitted;
 		private View? firstFocus;
@@ -219,78 +217,98 @@ namespace CelesteAndroid
 			_ => $"{e.GetType().Name}: {e.Message}",
 		};
 
+		/// <summary>
+		/// 1) Username and password (default), with Steam Guard: push approval in the Steam app, or a typed code.
+		/// 2) QR code, to be scanned with the Steam app on ANOTHER device (the Steam app cannot approve a sign-in link on the same phone).
+		/// </summary>
 		private async Task<SteamAuthResult> SignInAsync(CancellationToken ct)
 		{
 			while (true)
 			{
 				ct.ThrowIfCancellationRequested();
-				// 1) QR (default): "Open in Steam app" on the same phone, or scan the QR from another device.
-				switchToCredentials = new(TaskCreationOptions.RunContinuationsAsynchronously);
-				SetScreen(Screen.Qr, "Sign in to Steam", "Approve the sign-in in the Steam app on this phone.");
-				using (var qrCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
-				{
-					Task<SteamAuthResult> qr = session!.LoginWithQrAsync(this, qrCts.Token);
-					Task finished = await Task.WhenAny(qr, switchToCredentials.Task).ConfigureAwait(false);
-					if (finished == qr)
-					{
-						try
-						{
-							return await qr.ConfigureAwait(false);
-						}
-						catch (Exception e) when (e is SteamKit2.AsyncJobFailedException or SteamException or SteamKit2.Authentication.AuthenticationException && !ct.IsCancellationRequested)
-						{
-							// The connection dropped (or the challenge expired) while waiting for approval: reconnect and issue a new QR.
-							LogLine("steam: connection lost while waiting for approval, reconnecting with a new QR code");
-							session.Dispose();
-							session = new SteamSession(LogLine);
-							await session.ConnectAsync(ct).ConfigureAwait(false);
-							continue;
-						}
-					}
-					qrCts.Cancel();
-					try { await qr.ConfigureAwait(false); } catch (OperationCanceledException) { }
-				}
-
-				// 2) Username and password, with push approval (and a typed code as the last resort).
 				switchToQr = new(TaskCreationOptions.RunContinuationsAsynchronously);
 				credentialsSubmitted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-				SetScreen(Screen.Credentials, "Sign in with your Steam account", "Your password is only sent to Steam and is never saved.");
-				Task back = switchToQr.Task;
+				SetScreen(Screen.Credentials, "Sign in to Steam", "Your password is only sent to Steam and is never saved.");
 				Task<(string User, string Pass)> submitted = credentialsSubmitted.Task;
-				Task which = await Task.WhenAny(submitted, back).ConfigureAwait(false);
-				if (which == back)
-					continue;
+				Task which = await Task.WhenAny(submitted, switchToQr.Task).ConfigureAwait(false);
+				if (which == switchToQr.Task)
+				{
+					SteamAuthResult? viaQr = await SignInWithQrAsync(ct).ConfigureAwait(false);
+					if (viaQr != null) return viaQr;
+					continue; // back to username and password
+				}
 
 				(string user, string pass) = await submitted.ConfigureAwait(false);
 				try
 				{
-					// The form may have sat idle for minutes and Steam closes idle connections: reconnect before sending.
-					if (!session!.IsConnected)
-					{
-						LogLine("steam: connection was closed while the form was open, reconnecting");
-						session.Dispose();
-						session = new SteamSession(LogLine);
-						await session.ConnectAsync(ct).ConfigureAwait(false);
-					}
-					RunOnUiThread(() => { signInButton.Enabled = false; status.Text = "Signing in…"; });
-					return await session!.LoginWithCredentialsAsync(user, pass, this, ct).ConfigureAwait(false);
+					return await LoginWithCredentialsAsync(user, pass, ct).ConfigureAwait(false);
 				}
 				catch (SteamKit2.Authentication.AuthenticationException e)
 				{
 					LogLine("steam: credentials sign-in failed: " + e.Result);
-					RunOnUiThread(() => { signInButton.Enabled = true; status.Text = "Sign-in failed (" + e.Result + "). Check your details and try again."; });
-					// back to the form
+					// back to the form with the reason
 					credentialsSubmitted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-					SetScreen(Screen.Credentials, "Sign in with your Steam account", "Sign-in failed (" + e.Result + "). Check your details and try again.");
+					SetScreen(Screen.Credentials, "Sign in to Steam", "Sign-in failed (" + e.Result + "). Check your details and try again.");
 					which = await Task.WhenAny(credentialsSubmitted.Task, switchToQr.Task).ConfigureAwait(false);
-					if (which == switchToQr.Task) continue;
+					if (which == switchToQr.Task)
+					{
+						SteamAuthResult? viaQr = await SignInWithQrAsync(ct).ConfigureAwait(false);
+						if (viaQr != null) return viaQr;
+						continue;
+					}
 					(user, pass) = await credentialsSubmitted.Task.ConfigureAwait(false);
-					return await session!.LoginWithCredentialsAsync(user, pass, this, ct).ConfigureAwait(false);
+					return await LoginWithCredentialsAsync(user, pass, ct).ConfigureAwait(false);
 				}
 				finally
 				{
 					user = pass = "";
 				}
+			}
+		}
+
+		private async Task<SteamAuthResult> LoginWithCredentialsAsync(string user, string pass, CancellationToken ct)
+		{
+			// The form may have sat idle for minutes and Steam closes idle connections: reconnect before sending.
+			if (!session!.IsConnected)
+			{
+				LogLine("steam: connection was closed while the form was open, reconnecting");
+				session.Dispose();
+				session = new SteamSession(LogLine);
+				await session.ConnectAsync(ct).ConfigureAwait(false);
+			}
+			RunOnUiThread(() => { signInButton.Enabled = false; status.Text = "Signing in…"; });
+			return await session!.LoginWithCredentialsAsync(user, pass, this, ct).ConfigureAwait(false);
+		}
+
+		/// <summary>Shows the QR code; returns the sign-in, or null when the user went back to username and password.</summary>
+		private async Task<SteamAuthResult?> SignInWithQrAsync(CancellationToken ct)
+		{
+			while (true)
+			{
+				switchToCredentials = new(TaskCreationOptions.RunContinuationsAsynchronously);
+				SetScreen(Screen.Qr, "Sign in with a QR code", "On another device, open the Steam app and scan this code, then approve the sign-in.");
+				using var qrCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+				Task<SteamAuthResult> qr = session!.LoginWithQrAsync(this, qrCts.Token);
+				Task finished = await Task.WhenAny(qr, switchToCredentials.Task).ConfigureAwait(false);
+				if (finished == qr)
+				{
+					try
+					{
+						return await qr.ConfigureAwait(false);
+					}
+					catch (Exception e) when (e is SteamKit2.AsyncJobFailedException or SteamException or SteamKit2.Authentication.AuthenticationException && !ct.IsCancellationRequested)
+					{
+						// The connection dropped (or the challenge expired) while waiting for approval: reconnect and issue a new QR.
+						LogLine("steam: connection lost while waiting for approval, reconnecting with a new QR code");
+						session.Dispose();
+						session = new SteamSession(LogLine);
+						await session.ConnectAsync(ct).ConfigureAwait(false);
+						continue;
+					}
+				}
+				qrCts.Cancel();
+				try { await qr.ConfigureAwait(false); } catch (OperationCanceledException) { }
+				return null;
 			}
 		}
 
@@ -328,13 +346,12 @@ namespace CelesteAndroid
 
 		public void OnQrChallenge(string url)
 		{
-			challengeUrl = url;
 			RunOnUiThread(() => qrImage.SetImageBitmap(MakeQr(url)));
 		}
 
 		public void OnWaitingForDeviceApproval() => RunOnUiThread(() =>
 		{
-			status.Text = "Waiting for you to approve the sign-in in the Steam app on this phone…";
+			status.Text = "Approve the sign-in in the Steam app (a notification was sent), or enter a Steam Guard code.";
 			openSteamCredentials.Visibility = ViewStates.Visible;
 			enterCode.Visibility = ViewStates.Visible;
 		});
@@ -378,18 +395,12 @@ namespace CelesteAndroid
 			status = Text("", 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
 			column.AddView(status, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(6) });
 
-			// QR: main button + alternative
+			// QR code (second option): scanned with the Steam app on another device; the code itself is drawn at the right
 			qrGroup = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
-			openSteamQr = Pill("Open in Steam app", filled: true);
-			openSteamQr.Click += (_, _) => { if (challengeUrl != null) OpenInSteam(challengeUrl); };
-			MakeFocusable(openSteamQr, "OpenInSteamApp");
-			qrGroup.AddView(openSteamQr, UiKit.ButtonParams(this, 300, marginTop: 14));
-			useCredentials = Link("Sign in with username and password");
-			useCredentials.Click += (_, _) => switchToCredentials?.TrySetResult(true);
-			MakeFocusable(useCredentials, "UseCredentials");
-			qrGroup.AddView(useCredentials, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(8) });
-			var qrHint = Text("Signing in from another device? Scan the QR code with the Steam app.", 12, Color.Argb(170, 255, 255, 255), TypefaceStyle.Normal);
-			qrGroup.AddView(qrHint, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(6) });
+			backToCredentials = Link("Sign in with username and password instead");
+			backToCredentials.Click += (_, _) => switchToCredentials?.TrySetResult(true);
+			MakeFocusable(backToCredentials, "BackToCredentials");
+			qrGroup.AddView(backToCredentials, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(14) });
 			column.AddView(qrGroup);
 
 			// Username/password
@@ -420,10 +431,10 @@ namespace CelesteAndroid
 			submitCode.Click += (_, _) => SubmitCode();
 			MakeFocusable(submitCode, "SubmitCode");
 			credentialsGroup.AddView(submitCode, UiKit.ButtonParams(this, 300, marginTop: 6));
-			backToQr = Link("Back to the QR sign-in");
-			backToQr.Click += (_, _) => switchToQr?.TrySetResult(true);
-			MakeFocusable(backToQr, "BackToQr");
-			credentialsGroup.AddView(backToQr, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(6) });
+			useQr = Link("Sign in with a QR code instead");
+			useQr.Click += (_, _) => switchToQr?.TrySetResult(true);
+			MakeFocusable(useQr, "UseQr");
+			credentialsGroup.AddView(useQr, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(6) });
 			column.AddView(credentialsGroup);
 
 			// Progresso
@@ -470,7 +481,7 @@ namespace CelesteAndroid
 			signInButton.Enabled = true;
 			firstFocus = screen switch
 			{
-				Screen.Qr => openSteamQr,
+				Screen.Qr => backToCredentials,
 				Screen.Credentials => userField,
 				_ => cancelButton,
 			};
@@ -504,21 +515,6 @@ namespace CelesteAndroid
 			if (code.Length == 0 || session == null) return;
 			try { await session.SubmitGuardCodeAsync(code, codeIsEmail); }
 			catch (Exception e) { status.Text = Describe(e); }
-		}
-
-		private void OpenInSteam(string url)
-		{
-			try
-			{
-				var intent = new Intent(Intent.ActionView, Uri.Parse(url));
-				intent.SetPackage(SteamPackage);
-				StartActivity(intent);
-			}
-			catch (ActivityNotFoundException)
-			{
-				try { StartActivity(new Intent(Intent.ActionView, Uri.Parse(url))); }
-				catch (ActivityNotFoundException) { status.Text = "Install the Steam app first, or scan the QR code from another device."; }
-			}
 		}
 
 		private void OpenSteamApp()

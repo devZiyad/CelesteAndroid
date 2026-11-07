@@ -166,8 +166,8 @@ namespace CelesteAndroid.Steam
 		};
 
 		/// <summary>
-		/// QR login: <paramref name="events"/> receives the challenge URL (the one the "Open in Steam app" button opens and that becomes the
-		/// QR code); approval in the Steam app on the same phone (or another device) completes the login.
+		/// QR login: <paramref name="events"/> receives the challenge URL, which becomes the QR code; scanning it with the Steam app on
+		/// another device and approving completes the login (the Steam app cannot approve a link opened on the same phone).
 		/// </summary>
 		public async Task<SteamAuthResult> LoginWithQrAsync(ISteamLoginEvents events, CancellationToken ct)
 		{
