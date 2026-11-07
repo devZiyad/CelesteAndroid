@@ -37,3 +37,14 @@ See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
 - Conventional, imperative commit messages (`feat:`, `fix:`, `docs:`, `build:`...) with a short "why" body when not obvious.
 - Never rewrite pushed history or force-push.
 - Push the branch to origin when the goal is met. Never merge into `main` — the user merges after testing.
+
+## MonoMod patches (`src/Celeste.Android.Patches`)
+- **Additive hooks only.** Wrap with `orig_X()` plus extra logic, or add new members/types; never `[MonoModReplace]` a whole method and never
+  rewrite a menu-building method (append items after `orig_Create` instead). This keeps the patches compatible with Everest (stage 5).
+  `docs/EVEREST.md` holds the audit table against the Everest source in `refs/Everest` (gitignored shallow checkout of the commit matching the
+  installed Everest) and the known conflicts.
+
+## Verification
+- The phone is the only source of truth: verify on `$ANDROID_SERIAL` (screenshots, logcat). The desktop host (`src/Celeste.Desktop`) is an optional
+  dev tool, not a verification target: use it only when it genuinely speeds up iterating on a game patch or debugging a crash, and just make sure
+  it still compiles.

@@ -98,8 +98,20 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
 
 ## Port settings, display modes and overlay
 
-- **Settings.** The launcher's *Port settings* screen (`PortSettingsActivity`, gamepad-navigable) stores the options in SharedPreferences (`port`). `CelesteLauncher.Run` publishes them as `AppContext` keys `CelesteAndroid.<Key>` (string values) and the patched game reads them through `PortConfig` (`Celeste.Android.Patches`). The renderer is applied before the game starts (`FNA3D_FORCE_DRIVER`). The desktop host fills the same keys from `port-settings.json` / `--settings file` / flags (see `PortOptions`) and sets `CelesteAndroid.Host=desktop`.
-- **Display modes.** On Android (`HostConfig.IsAndroid`) the game always runs fullscreen at the device's native resolution times *Resolution scale* (FNA3D upscales a smaller backbuffer on present). `Engine.SetWindowed`/`Settings.ApplyScreen` are redirected to fullscreen and the *Fullscreen* / *Window Scale* items are hidden in the Video menu. The desktop host keeps them.
-- **Screen fit.** `Engine.UpdateView` is post-processed by `PortView.Adjust` (stretch, integer scaling on the 320x180 pixel grid); `RenderCore` clears the bars black or draws the side art.
+- **One settings file, two editors.** The options live in `files/userdata/port-settings.json` (a flat JSON object, see
+  `PortSettingsCatalog.cs`, compiled into the patches, the app and the desktop host). The launcher's *Port settings* screen
+  (`PortSettingsActivity`, for pre-boot use) and the **PORT section of Celeste's own Options menu** both read and write it, so a change
+  in one shows up in the other. `CelesteLauncher.Run` publishes the values as `AppContext` keys `CelesteAndroid.<Key>` plus the file path
+  (`CelesteAndroid.SettingsFile`); in game, `PortConfig.Set` updates the `AppContext` value (read every frame) and rewrites the file.
+  Overlay, overlay corner, screen fit, integer scaling, frame cap, vsync and resolution scale apply immediately (`PortLive`); the
+  renderer applies on the next launch (the menu says so).
+- **PORT menu** (`Celeste/patch_MenuOptions.cs`): an additive hook. The original menu is built by `orig_Create`; the hook then only appends a
+  `PORT` sub-header and `TextMenu.Slider`/`OnOff` items (same style, font, sounds and controller navigation as VIDEO/AUDIO).
+- **Additive-hook rule.** Port patches must never replace or rewrite a vanilla method (`[MonoModReplace]`, or re-implementing a
+  menu-building method). Use `orig_X()` wrappers/hooks and append items/members, so the patches coexist with Everest's. The audit table
+  and the remaining conflicts are in `docs/EVEREST.md`.
+
+- **Display modes.** On Android (`HostConfig.IsAndroid`) the game always runs fullscreen at the device's native resolution times *Resolution scale* (FNA3D upscales a smaller backbuffer on present; the scale also applies live from the PORT menu). `Engine.SetWindowed` redirects to `SetFullscreen`, `Settings.ApplyScreen` forces `Fullscreen = true` before the original runs, and the *Fullscreen* / *Window Scale* items are hidden in the Video menu (all as hooks around the originals, see `docs/EVEREST.md`). The desktop host keeps them.
+- **Screen fit.** `Engine.UpdateView` is post-processed by `PortView.Adjust` (stretch, integer scaling on the 320x180 pixel grid); after `orig_RenderCore` the bars outside the game viewport are painted with the side art (scissored) or black, then the overlay is drawn.
 - **Frame cap.** Only 30 or 60. The game logic stays at a fixed 60 Hz (the physics depends on it), so a higher cap could never produce more frames: 30 skips every other draw, 60 draws once per update. A value above 60 saved by an older version (90 / 120 / unlimited) is migrated to 60 by the launcher (`PortSettings.MigrateFrameCap`), and the game clamps any other source (desktop JSON/flags) to 60; the startup log notes it (`[CelesteAndroid] setting frame_cap=60 (requested 120, limited to 60 ...)`).
-- **Overlay.** `PortOverlay.Draw` runs at the end of `Engine.RenderCore` (works in the desktop host too) and logs `[CelesteAndroid] fps ...` once per second. Applied settings are logged at startup as `[CelesteAndroid] setting name=value`.
+- **Overlay.** `PortOverlay.Draw` runs at the end of `Engine.RenderCore` and logs `[CelesteAndroid] fps ...` once per second. Applied settings are logged at startup as `[CelesteAndroid] setting name=value`.
