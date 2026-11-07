@@ -106,3 +106,9 @@ dotnet run --project src/Celeste.Desktop -- --overlay graph --corner topright --
 JSON keys: `renderer`, `frameCap`, `vsync`, `resolutionScale`, `overlay`, `overlayCorner`, `screenFit`, `integerScaling`.
 
 On the phone, `adb shell input keyevent` presses are released within a millisecond and the game polls input once per frame, so send held presses to drive the game (`adb shell input keyevent --duration 90 KEYCODE_C`; Celeste confirm = `C`, back = `X`).
+
+## Why the debug app's data was once wiped (root cause)
+
+On 2026-11-07 the debug package's game files and saves disappeared. Root cause: the apps were uninstalled by hand from the phone's home screen (around 20:19), so the next `deploy-android.sh` run (20:25) was a *fresh* install, not an update. The deploy script itself was not at fault: it uses `adb install -r`, has no uninstall path, the debug keystore and `versionCode` were unchanged, and no Fast Deployment is used. The device log agrees: the system uninstaller was started from the Samsung home screen at 20:19:04 and the 20:25 install has no "update" markers and a new uid.
+
+The script still guards against this class of problem: it prints a `NOTE: ... FRESH install` when the package is not installed, verifies that an install updated the app in place and left its data unchanged, and stops (never uninstalls) if an update is impossible.
