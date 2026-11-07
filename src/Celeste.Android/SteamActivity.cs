@@ -53,7 +53,7 @@ namespace CelesteAndroid
 		private LinearLayout qrGroup = null!, credentialsGroup = null!, progressGroup = null!, actions = null!;
 		private ImageView qrImage = null!;
 		private ProgressBar bar = null!;
-		private Button openSteamQr = null!, signInButton = null!, openSteamCredentials = null!, submitCode = null!, cancelButton = null!, retryButton = null!;
+		private TextView openSteamQr = null!, signInButton = null!, openSteamCredentials = null!, submitCode = null!, cancelButton = null!, retryButton = null!;
 		private TextView useCredentials = null!, backToQr = null!, enterCode = null!;
 		private EditText userField = null!, passField = null!, codeField = null!;
 
@@ -311,14 +311,20 @@ namespace CelesteAndroid
 				Background = new GradientDrawable(GradientDrawable.Orientation.TopBottom!, new int[] { Color.Argb(255, 38, 24, 70), Color.Argb(255, 18, 12, 34) }),
 			}, new FrameLayout.LayoutParams(-1, -1));
 
-			var row = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			var row = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Horizontal });
 			row.SetGravity(GravityFlags.CenterVertical);
 			row.SetPadding(Dp(64), Dp(12), Dp(64), Dp(12));
 			root.AddView(row, new FrameLayout.LayoutParams(-1, -1));
 
-			var column = new LinearLayout(this) { Orientation = Orientation.Vertical };
+			var column = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			column.SetGravity(GravityFlags.CenterVertical);
-			row.AddView(column, new LinearLayout.LayoutParams(0, -2, 1f));
+			column.SetPadding(Dp(6), Dp(10), Dp(6), Dp(10));
+			// Se o conteúdo não couber (formulário + teclado, telas pequenas), rola em vez de cortar.
+			var scroll = new ScrollView(this) { VerticalScrollBarEnabled = false, FillViewport = true };
+			scroll.SetClipChildren(false);
+			scroll.SetClipToPadding(false);
+			scroll.AddView(column, new FrameLayout.LayoutParams(-1, -2));
+			row.AddView(scroll, new LinearLayout.LayoutParams(0, -1, 1f));
 
 			title = Text("", 26, Color.White, TypefaceStyle.Bold);
 			column.AddView(title);
@@ -326,11 +332,11 @@ namespace CelesteAndroid
 			column.AddView(status, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(6) });
 
 			// QR: botão principal + alternativa
-			qrGroup = new LinearLayout(this) { Orientation = Orientation.Vertical };
+			qrGroup = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			openSteamQr = Pill("Open in Steam app", filled: true);
 			openSteamQr.Click += (_, _) => { if (challengeUrl != null) OpenInSteam(challengeUrl); };
 			MakeFocusable(openSteamQr, "OpenInSteamApp");
-			qrGroup.AddView(openSteamQr, new LinearLayout.LayoutParams(Dp(280), Dp(52)) { TopMargin = Dp(14) });
+			qrGroup.AddView(openSteamQr, UiKit.ButtonParams(this, 300, marginTop: 14));
 			useCredentials = Link("Sign in with username and password");
 			useCredentials.Click += (_, _) => switchToCredentials?.TrySetResult(true);
 			MakeFocusable(useCredentials, "UseCredentials");
@@ -340,33 +346,33 @@ namespace CelesteAndroid
 			column.AddView(qrGroup);
 
 			// Usuário/senha
-			credentialsGroup = new LinearLayout(this) { Orientation = Orientation.Vertical };
+			credentialsGroup = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			userField = Field("Steam username", password: false);
 			passField = Field("Password", password: true);
 			codeField = Field("Steam Guard code", password: false);
 			codeField.Visibility = ViewStates.Gone;
-			credentialsGroup.AddView(userField, new LinearLayout.LayoutParams(Dp(300), Dp(46)) { TopMargin = Dp(10) });
-			credentialsGroup.AddView(passField, new LinearLayout.LayoutParams(Dp(300), Dp(46)) { TopMargin = Dp(6) });
+			credentialsGroup.AddView(userField, FieldParams(10));
+			credentialsGroup.AddView(passField, FieldParams(6));
 			signInButton = Pill("Sign in", filled: true);
 			signInButton.Click += (_, _) => SubmitCredentials();
 			MakeFocusable(signInButton, "SignIn");
-			credentialsGroup.AddView(signInButton, new LinearLayout.LayoutParams(Dp(300), Dp(48)) { TopMargin = Dp(10) });
+			credentialsGroup.AddView(signInButton, UiKit.ButtonParams(this, 300, marginTop: 10));
 			openSteamCredentials = Pill("Open the Steam app to approve", filled: false);
 			openSteamCredentials.Visibility = ViewStates.Gone;
 			openSteamCredentials.Click += (_, _) => OpenSteamApp();
 			MakeFocusable(openSteamCredentials, "OpenSteamApp");
-			credentialsGroup.AddView(openSteamCredentials, new LinearLayout.LayoutParams(Dp(300), Dp(44)) { TopMargin = Dp(8) });
+			credentialsGroup.AddView(openSteamCredentials, UiKit.ButtonParams(this, 300, marginTop: 6));
 			enterCode = Link("Enter a Steam Guard code instead");
 			enterCode.Visibility = ViewStates.Gone;
 			enterCode.Click += (_, _) => ShowCodeEntry("Enter the code from your Steam Guard app.");
 			MakeFocusable(enterCode, "EnterCode");
 			credentialsGroup.AddView(enterCode, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(4) });
-			credentialsGroup.AddView(codeField, new LinearLayout.LayoutParams(Dp(300), Dp(46)) { TopMargin = Dp(6) });
+			credentialsGroup.AddView(codeField, FieldParams(6));
 			submitCode = Pill("Submit code", filled: false);
 			submitCode.Visibility = ViewStates.Gone;
 			submitCode.Click += (_, _) => SubmitCode();
 			MakeFocusable(submitCode, "SubmitCode");
-			credentialsGroup.AddView(submitCode, new LinearLayout.LayoutParams(Dp(300), Dp(44)) { TopMargin = Dp(6) });
+			credentialsGroup.AddView(submitCode, UiKit.ButtonParams(this, 300, marginTop: 6));
 			backToQr = Link("Back to the QR sign-in");
 			backToQr.Click += (_, _) => switchToQr?.TrySetResult(true);
 			MakeFocusable(backToQr, "BackToQr");
@@ -383,16 +389,16 @@ namespace CelesteAndroid
 			progressGroup.AddView(detail, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(8) });
 			column.AddView(progressGroup);
 
-			actions = new LinearLayout(this) { Orientation = Orientation.Horizontal };
+			actions = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Horizontal });
 			cancelButton = Pill("Cancel", filled: false);
 			cancelButton.Click += (_, _) => CancelAndClose();
 			MakeFocusable(cancelButton, "Cancel");
-			actions.AddView(cancelButton, new LinearLayout.LayoutParams(Dp(150), Dp(44)) { TopMargin = Dp(14) });
+			actions.AddView(cancelButton, UiKit.ButtonParams(this, 150, marginTop: 14));
 			retryButton = Pill("Try again", filled: true);
 			retryButton.Visibility = ViewStates.Gone;
 			retryButton.Click += (_, _) => { cts.Cancel(); cts = new CancellationTokenSource(); session?.Dispose(); retryButton.Visibility = ViewStates.Gone; _ = Task.Run(() => PipelineAsync(cts.Token)); };
 			MakeFocusable(retryButton, "Retry");
-			actions.AddView(retryButton, new LinearLayout.LayoutParams(Dp(170), Dp(44)) { TopMargin = Dp(14), LeftMargin = Dp(10) });
+			actions.AddView(retryButton, UiKit.ButtonParams(this, 170, marginTop: 14));
 			column.AddView(actions);
 
 			qrImage = new ImageView(this);
@@ -510,6 +516,9 @@ namespace CelesteAndroid
 
 		#region Visual
 
+		private LinearLayout.LayoutParams FieldParams(float marginTop) =>
+			new(Dp(310), ViewGroup.LayoutParams.WrapContent) { TopMargin = Dp(marginTop), BottomMargin = Dp(4), LeftMargin = Dp(4), RightMargin = Dp(4) };
+
 		private EditText Field(string hint, bool password)
 		{
 			var field = new EditText(this) { Hint = hint };
@@ -517,7 +526,9 @@ namespace CelesteAndroid
 			field.SetHintTextColor(Color.Argb(120, 255, 255, 255));
 			field.SetSingleLine(true);
 			field.SetTextSize(ComplexUnitType.Sp, 16);
-			field.SetPadding(Dp(14), 0, Dp(14), 0);
+			field.SetPadding(Dp(16), Dp(10), Dp(16), Dp(10));
+			field.SetMinHeight(Dp(46));
+			field.SetMinimumHeight(Dp(46));
 			field.InputType = password ? InputTypes.ClassText | InputTypes.TextVariationPassword : InputTypes.ClassText | InputTypes.TextFlagNoSuggestions;
 			if (password) field.TransformationMethod = PasswordTransformationMethod.Instance;
 			field.ImeOptions = ImeAction.Next | (ImeAction)ImeFlags.NoExtractUi;
@@ -528,26 +539,7 @@ namespace CelesteAndroid
 			return field;
 		}
 
-		private Button Pill(string label, bool filled)
-		{
-			var button = new Button(this) { Text = label, StateListAnimator = null };
-			button.SetAllCaps(false);
-			button.SetTextSize(ComplexUnitType.Sp, filled ? 17 : 15);
-			button.SetTypeface(Typeface.Create("sans-serif-medium", TypefaceStyle.Bold), filled ? TypefaceStyle.Bold : TypefaceStyle.Normal);
-			var shape = new GradientDrawable();
-			shape.SetCornerRadius(Dp(25));
-			if (filled) { shape.SetColor(Color.White); button.SetTextColor(Night); }
-			else { shape.SetColor(Color.Argb(40, 255, 255, 255)); shape.SetStroke(Dp(1.5f), Color.Argb(200, 255, 255, 255)); button.SetTextColor(Color.White); }
-			var focused = new GradientDrawable();
-			focused.SetCornerRadius(Dp(25));
-			focused.SetColor(filled ? Color.Argb(255, 255, 236, 246) : Color.Argb(110, 242, 184, 216));
-			focused.SetStroke(Dp(3.5f), Accent);
-			var states = new StateListDrawable();
-			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, focused);
-			states.AddState(new int[0], new RippleDrawable(Android.Content.Res.ColorStateList.ValueOf(Color.Argb(60, 242, 184, 216)), shape, null));
-			button.Background = states;
-			return button;
-		}
+		private TextView Pill(string label, bool filled) => UiKit.Pill(this, label, filled, minHeightDp: filled ? 50 : 44);
 
 		private TextView Link(string text)
 		{

@@ -42,8 +42,8 @@ namespace CelesteAndroid
 		private ImageView art = null!;
 		private LinearLayout panel = null!;
 		private TextView status = null!;
-		private Button play = null!;
-		private Button steamButton = null!;
+		private TextView play = null!;
+		private TextView steamButton = null!;
 		private TextView importFolder = null!;
 		private TextView deleteGame = null!;
 		private LinearLayout links2 = null!;
@@ -188,7 +188,7 @@ namespace CelesteAndroid
 			};
 			root.AddView(shade, Match());
 
-			panel = new LinearLayout(this) { Orientation = Orientation.Vertical };
+			panel = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			panel.SetGravity(GravityFlags.CenterVertical | GravityFlags.Start);
 			panel.SetPadding(Dp(56), Dp(12), Dp(24), Dp(12));
 			root.AddView(panel, new FrameLayout.LayoutParams(Dp(460), ViewGroup.LayoutParams.MatchParent));
@@ -222,12 +222,12 @@ namespace CelesteAndroid
 			play = PillButton("PLAY", filled: true);
 			play.Click += (_, _) => Play();
 			MakeFocusable(play, "Play");
-			panel.AddView(play, new LinearLayout.LayoutParams(Dp(260), Dp(50)) { TopMargin = Dp(14) });
+			panel.AddView(play, UiKit.ButtonParams(this, 260, marginTop: 14));
 
 			steamButton = PillButton("Install from Steam", filled: false);
 			steamButton.Click += (_, _) => StartSteam(record: false);
 			MakeFocusable(steamButton, "InstallFromSteam");
-			panel.AddView(steamButton, new LinearLayout.LayoutParams(Dp(260), Dp(44)) { TopMargin = Dp(10) });
+			panel.AddView(steamButton, UiKit.ButtonParams(this, 260, marginTop: 8));
 
 			links = new LinearLayout(this) { Orientation = Orientation.Horizontal };
 			importFolder = LinkText("Import folder");
@@ -290,38 +290,7 @@ namespace CelesteAndroid
 				art.SetImageResource(Resource.Drawable.launcher_art);
 		}
 
-		private Button PillButton(string label, bool filled)
-		{
-			var button = new Button(this) { Text = label, StateListAnimator = null };
-			button.SetAllCaps(false);
-			button.SetTextSize(ComplexUnitType.Sp, filled ? 18 : 15);
-			button.SetTypeface(Typeface.Create("sans-serif-medium", filled ? TypefaceStyle.Bold : TypefaceStyle.Normal), filled ? TypefaceStyle.Bold : TypefaceStyle.Normal);
-			button.LetterSpacing = filled ? 0.12f : 0.02f;
-			var shape = new GradientDrawable();
-			shape.SetCornerRadius(Dp(25));
-			if (filled)
-			{
-				shape.SetColor(Color.White);
-				button.SetTextColor(Night);
-			}
-			else
-			{
-				shape.SetColor(Color.Argb(40, 255, 255, 255));
-				shape.SetStroke(Dp(1.5f), Color.Argb(200, 255, 255, 255));
-				button.SetTextColor(Color.White);
-			}
-			var ripple = new RippleDrawable(Android.Content.Res.ColorStateList.ValueOf(Color.Argb(60, 242, 184, 216)), shape, null);
-			// Foco (controle/teclado): contorno rosa grosso, bem visível à distância.
-			var focused = new GradientDrawable();
-			focused.SetCornerRadius(Dp(25));
-			focused.SetColor(filled ? Color.Argb(255, 255, 236, 246) : Color.Argb(110, 242, 184, 216));
-			focused.SetStroke(Dp(3.5f), Accent);
-			var states = new StateListDrawable();
-			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, focused);
-			states.AddState(new int[0], ripple);
-			button.Background = states;
-			return button;
-		}
+		private TextView PillButton(string label, bool filled) => UiKit.Pill(this, label, filled, minHeightDp: filled ? 50 : 44);
 
 		private TextView Text(string text, float sp, Color color, TypefaceStyle style)
 		{
@@ -440,21 +409,25 @@ namespace CelesteAndroid
 			card.SetPadding(Dp(26), Dp(22), Dp(26), Dp(20));
 			card.AddView(Text(title, 22, Color.White, TypefaceStyle.Bold));
 			var body = Text(message, 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
-			card.AddView(body, Margins(top: 8));
+			var bodyScroll = new ScrollView(this) { VerticalScrollBarEnabled = false };
+			bodyScroll.AddView(body);
+			card.AddView(bodyScroll, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(8) });
 
 			var buttons = new LinearLayout(this) { Orientation = Orientation.Horizontal };
 			buttons.SetGravity(GravityFlags.End);
-			Button cancel = PillButton("Cancel", filled: false);
+			TextView cancel = PillButton("Cancel", filled: false);
 			MakeFocusable(cancel, "ConfirmCancel");
 			cancel.Click += (_, _) => DismissConfirm();
-			Button confirm = PillButton(confirmText, filled: true);
+			TextView confirm = PillButton(confirmText, filled: true);
 			MakeFocusable(confirm, "ConfirmYes");
 			confirm.Click += (_, _) => { DismissConfirm(); onConfirm(); };
-			buttons.AddView(cancel, new LinearLayout.LayoutParams(Dp(140), Dp(44)));
-			buttons.AddView(confirm, new LinearLayout.LayoutParams(Dp(140), Dp(44)) { LeftMargin = Dp(12) });
-			card.AddView(buttons, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(18) });
+			buttons.AddView(cancel, UiKit.ButtonParams(this, 140, marginTop: 4, marginSide: 6));
+			buttons.AddView(confirm, UiKit.ButtonParams(this, 140, marginTop: 4, marginSide: 6));
+			card.AddView(buttons, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(14) });
 
-			overlay.AddView(card, new FrameLayout.LayoutParams(Dp(520), ViewGroup.LayoutParams.WrapContent, GravityFlags.Center));
+			UiKit.NoClip(card); UiKit.NoClip(buttons);
+			card.SetPadding(Dp(26), Dp(22), Dp(26), Dp(22));
+			overlay.AddView(card, new FrameLayout.LayoutParams(Dp(520), ViewGroup.LayoutParams.WrapContent, GravityFlags.Center) { TopMargin = Dp(16), BottomMargin = Dp(16) });
 			rootLayout.AddView(overlay, Match());
 			confirmOverlay = overlay;
 			cancel.RequestFocus();

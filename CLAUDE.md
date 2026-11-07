@@ -48,3 +48,6 @@ See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
 - The phone is the only source of truth: verify on `$ANDROID_SERIAL` (screenshots, logcat). The desktop host (`src/Celeste.Desktop`) is an optional
   dev tool, not a verification target: use it only when it genuinely speeds up iterating on a game patch or debugging a crash, and just make sure
   it still compiles.
+
+## Launcher UI
+- Every new or changed launcher screen or dialog must be screenshot-checked on the phone with each control focused (gamepad keys), and nothing may be clipped (buttons, focus outlines, text). No fixed heights: use `UiKit` (`Pill`, `ButtonParams`, `NoClip`), wrap_content with margin for the focus outline, and a ScrollView where content may not fit.

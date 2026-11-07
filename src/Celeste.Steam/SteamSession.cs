@@ -54,9 +54,28 @@ namespace CelesteAndroid.Steam
 
 		public bool IsLoggedOn { get; private set; }
 
+		private sealed class DiagnosticListener : IDebugListener
+		{
+			private readonly Action<string> sink;
+			public DiagnosticListener(Action<string> sink) => this.sink = sink;
+
+			public void WriteLine(string category, string msg)
+			{
+				// Só em builds de depuração e sem nada que lembre segredo.
+				if (msg.Contains("token", StringComparison.OrdinalIgnoreCase) || msg.Contains("password", StringComparison.OrdinalIgnoreCase)
+					|| msg.Contains("refresh", StringComparison.OrdinalIgnoreCase) || msg.Contains("access", StringComparison.OrdinalIgnoreCase))
+					return;
+				sink($"steamkit[{category}]: {msg}");
+			}
+		}
+
 		public SteamSession(Action<string> log)
 		{
 			this.log = log;
+#if DEBUG
+			DebugLog.AddListener(new DiagnosticListener(log));
+			DebugLog.Enabled = true;
+#endif
 			SteamConfiguration config = SteamConfiguration.Create(b => b.WithProtocolTypes(ProtocolTypes.WebSocket));
 			client = new SteamClient(config);
 			callbacks = new CallbackManager(client);
@@ -72,6 +91,9 @@ namespace CelesteAndroid.Steam
 		private void OnDisconnected(SteamClient.DisconnectedCallback cb)
 		{
 			IsLoggedOn = false;
+			log($"steam: disconnected (user initiated: {cb.UserInitiated})");
+			if (cb.UserInitiated)
+				return; // um Disconnect() nosso (troca de servidor) não derruba a tentativa seguinte
 			connected.TrySetException(new SteamException("Disconnected from Steam."));
 			loggedOn.TrySetException(new SteamException("Disconnected from Steam."));
 		}
@@ -80,7 +102,6 @@ namespace CelesteAndroid.Steam
 
 		public async Task ConnectAsync(CancellationToken ct)
 		{
-			connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
 			pump ??= Task.Run(async () =>
 			{
 				while (!lifetime.IsCancellationRequested)
@@ -89,10 +110,25 @@ namespace CelesteAndroid.Steam
 					catch (OperationCanceledException) { break; }
 				}
 			});
-			log("steam: connecting");
-			client.Connect();
-			await WaitAsync(connected.Task, TimeSpan.FromSeconds(30), ct, "connecting to Steam").ConfigureAwait(false);
-			log("steam: connected");
+			// Cada Connect() usa o próximo servidor da lista: se um não responde (porta bloqueada, servidor fora do ar), tenta o seguinte.
+			const int attempts = 8;
+			for (int attempt = 1; ; attempt++)
+			{
+				connected = new(TaskCreationOptions.RunContinuationsAsynchronously);
+				log($"steam: connecting (attempt {attempt}/{attempts})");
+				client.Connect();
+				try
+				{
+					await WaitAsync(connected.Task, TimeSpan.FromSeconds(20), ct, "connecting to Steam").ConfigureAwait(false);
+					log("steam: connected");
+					return;
+				}
+				catch (SteamException) when (attempt < attempts)
+				{
+					try { client.Disconnect(); } catch (Exception) { }
+					await Task.Delay(400, ct).ConfigureAwait(false);
+				}
+			}
 		}
 
 		private static async Task<T> WaitAsync<T>(Task<T> task, TimeSpan timeout, CancellationToken ct, string what)
