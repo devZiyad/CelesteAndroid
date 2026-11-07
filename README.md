@@ -13,7 +13,7 @@ CelesteAndroid is a launcher + runtime that takes the files of the Celeste PC ve
 - **Vulkan by default** (SDL_GPU), with OpenGL ES as a fallback you can pick in the launcher.
 - **Full audio**: FMOD Studio 1.10.14, the same version the game's sound banks were built with.
 - **Launcher**: pick your game folder or `.zip` and the app copies it, patches it and gets it ready to play.
-- **Bring your saves**: *Import saves* copies your `.celeste` save files (e.g. the `Saves` folder from your PC) into the game.
+- **Bring your saves, take them with you**: *Config > Saves* imports your `.celeste` save files (a folder or a .zip) and exports them the same way. An import is checked first and your current saves are backed up before they are replaced.
 - **Wide screens**: the game keeps its native 16:9 image and the side bars show a blurred version of the game's key art instead of plain black.
 - **Your files stay yours**: the original `Celeste.exe` is never modified. A patched copy is generated on the device with [MonoMod](https://github.com/MonoMod/MonoMod), the same tooling the [Everest](https://everestapi.github.io/) mod loader uses.
 
@@ -43,7 +43,7 @@ Tested with Celeste **1.4.0.0**.
 3. Open **Celeste** and tap **Open game files** (or **Import .zip**) and select it.
 4. Wait for the import (copy + patch, about 1–2 minutes), then tap **PLAY**.
 
-Your saves live in the app's private storage, and uninstalling the app deletes them. To bring your PC progress over, copy the `Saves` folder from your PC game folder to your phone and use **Import saves**. Your current saves are backed up to `Backups/` first.
+Your saves live in the app's private storage, and uninstalling the app deletes them. To bring your PC progress over, copy the `Saves` folder from your PC game folder to your phone and use **Config > Saves > Import**. Your current saves are backed up first.
 
 ## Building from source
 

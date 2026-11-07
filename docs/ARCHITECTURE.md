@@ -16,8 +16,11 @@ Celeste is a C# game built on **FNA** (an XNA 4 reimplementation). `Celeste.exe`
 ```
 src/
   Celeste.Android/           .NET for Android app (launcher + game activity)
-    LauncherActivity.cs      UI: key art, PLAY, import folder/.zip/saves, graphics toggle
-    GameInstaller.cs         import (SAF folder, .zip, embedded assets) → MonoMod patch → blurred background
+    LauncherActivity.cs      main screen: key art, Play (or Install from Steam / Import folder / Import .zip when not installed) and Config; autoplay
+    ConfigActivity.cs        Config: Port settings, Saves (import/export), Game files (check for updates, re-import, delete), Steam account
+    SteamActivity.cs         sign-in (username/password + Steam Guard, or QR for another device) and the live install progress screen
+    InstallService.cs        foreground service (dataSync) that downloads and installs from Steam; InstallPipeline.cs is one attempt, InstallCoordinator.cs the shared state
+    GameInstaller.cs         import (SAF folder, .zip, embedded assets) → MonoMod patch → blurred background; saves import/export
     GameActivity.cs          SDLActivity subclass, process ":game"; runs the game on the SDL thread
     CelesteLauncher.cs       loads the patched Celeste.dll and invokes Celeste.Main via reflection
     HelloGame.cs             minimal FNA game (stack smoke test; used if the game isn't installed)
@@ -99,8 +102,8 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
 ## Port settings, display modes and overlay
 
 - **One settings file, two editors.** The options live in `files/userdata/port-settings.json` (a flat JSON object, see
-  `PortSettingsCatalog.cs`, compiled into the patches, the app and the desktop host). The launcher's *Port settings* screen
-  (`PortSettingsActivity`, for pre-boot use) and the **PORT section of Celeste's own Options menu** both read and write it, so a change
+  `PortSettingsCatalog.cs`, compiled into the patches, the app and the desktop host). The launcher's *Config > Port settings* section
+  (`ConfigActivity`, for pre-boot use) and the **PORT section of Celeste's own Options menu** both read and write it, so a change
   in one shows up in the other. `CelesteLauncher.Run` publishes the values as `AppContext` keys `CelesteAndroid.<Key>` plus the file path
   (`CelesteAndroid.SettingsFile`); in game, `PortConfig.Set` updates the `AppContext` value (read every frame) and rewrites the file.
   Overlay, overlay corner, screen fit, integer scaling, frame cap, vsync and resolution scale apply immediately (`PortLive`); the
@@ -115,3 +118,32 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
 - **Screen fit.** `Engine.UpdateView` is post-processed by `PortView.Adjust` (stretch, integer scaling on the 320x180 pixel grid); after `orig_RenderCore` the bars outside the game viewport are painted with the side art (scissored) or black, then the overlay is drawn.
 - **Frame cap.** Only 30 or 60. The game logic stays at a fixed 60 Hz (the physics depends on it), so a higher cap could never produce more frames: 30 skips every other draw, 60 draws once per update. A value above 60 saved by an older version (90 / 120 / unlimited) is migrated to 60 by the launcher (`PortSettings.MigrateFrameCap`), and the game clamps any other source (desktop JSON/flags) to 60; the startup log notes it (`[CelesteAndroid] setting frame_cap=60 (requested 120, limited to 60 ...)`).
 - **Overlay.** `PortOverlay.Draw` runs at the end of `Engine.RenderCore` and logs `[CelesteAndroid] fps ...` once per second. Applied settings are logged at startup as `[CelesteAndroid] setting name=value`.
+
+## App lifecycle, orientation and back (stage 3b)
+
+- **Background / foreground.** `PortLifecycle` installs an SDL event watch (`SDL_AddEventWatch`). SDL raises `WILL_ENTER_BACKGROUND` from inside its event
+  pump, i.e. on the game thread, and then blocks that pump until the app resumes. The handler opens Celeste's pause menu (`Level.Pause`, retried every update
+  if the level cannot pause yet) and calls FMOD's `mixerSuspend`; `DID_ENTER_FOREGROUND` calls `mixerResume` and the game stays paused. SDL recreates the
+  surface and the swapchain/GL context itself (Vulkan and OpenGL ES alike), so there is no black screen or device-lost crash. Logcat markers:
+  `[CelesteAndroid] lifecycle: ...`.
+- **Landscape only.** SDL's `setOrientationBis` overwrote the manifest's `sensorLandscape` with `FULL_USER` when the window was created (portrait allowed);
+  `GameActivity` overrides it.
+- **Android Back** is Celeste's pause/back key. With predictive back (targetSdk 36) the key event never arrives, so `GameActivity` registers an
+  `OnBackInvokedCallback` that sends an Escape press to SDL.
+- **Autoplay.** `LauncherActivity.MaybeAutoplay` runs once per process in `OnCreate` (never in `OnResume`, never for a recreated activity): with the game
+  installed and the Autoplay setting on, the app opens straight into the game. Returning from the game (the title's Exit, or *Exit to launcher*) shows the
+  launcher and does not start the game again. *Exit to launcher* (`PortExit`, an additive `Level.Pause` hook) runs the game's own *Save and Quit* and closes
+  the game when the main menu is back.
+
+## Install from Steam (stage 3b)
+
+- `InstallService` is a foreground service (`foregroundServiceType=dataSync`, notification channel `install_progress`) holding a Wi-Fi lock and a partial wake
+  lock. `InstallPipeline` does one attempt (connect, sign in with the stored refresh token, ownership, manifest, download and verify, patch, side art); the
+  service repeats it with a backoff when the network drops. `files/steam/install.pending` marks an unfinished install, so the system restarting the service
+  after a kill (or the launcher opening) resumes it. The screens only follow `InstallCoordinator`: the step text, the file counter (a file counts when its last
+  chunk is written), bytes and speed, and `Done`.
+- `SteamActivity` only does the interactive part (sign-in) and shows the live state. *Check for updates* runs the same pipeline in update mode and stops after
+  the manifest when the installed manifest id is already the latest. Signing out (`SteamAccount`) ends the session, asks Steam to revoke the refresh token
+  when it can, and deletes the token and its Keystore key; game files and saves are kept.
+- The in-game PORT section lists only settings that apply live. Renderer (needs a restart) is only in Config.
+- Logcat markers for scripted checks: `CelesteInstall: progress: ...` every 5 s, `[CelesteAndroid] menu PORT: ...`, `menu pause: ...`, `viewport x,y,w,h ...`.

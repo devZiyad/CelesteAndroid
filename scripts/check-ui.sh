@@ -23,7 +23,12 @@ while [ $# -gt 0 ]; do
 	shift
 done
 XML="$(mktemp)"; trap 'rm -f "$XML"' EXIT
-adb -s "$ANDROID_SERIAL" shell uiautomator dump /sdcard/celeste-ui.xml >/dev/null
+# uiautomator sometimes cannot get an idle state while a progress bar animates: retry a few times.
+for attempt in 1 2 3 4 5; do
+	adb -s "$ANDROID_SERIAL" shell uiautomator dump /sdcard/celeste-ui.xml 2>&1 | grep -q "UI hierarchy dumped" && break
+	[ "$attempt" = 5 ] && die "uiautomator could not dump the UI"
+	sleep 1
+done
 adb -s "$ANDROID_SERIAL" exec-out cat /sdcard/celeste-ui.xml > "$XML"
 adb -s "$ANDROID_SERIAL" shell rm -f /sdcard/celeste-ui.xml
 python3 -I - "$XML" "$ALL" "$PKG" <<'PY'
@@ -57,7 +62,8 @@ def walk(node, parent_bounds, parent_scrolls):
             out_y = b[1] < p[1] or b[3] > p[3]
             if out_x or (out_y and not parent_scrolls):
                 flags.append("CLIPPED")
-            if node.get("focusable") == "true" and not parent_scrolls and not flags:
+            full_bleed = b == p  # a container that fills its parent (e.g. a dialog's dimmed overlay) has no outline to clip
+            if node.get("focusable") == "true" and not parent_scrolls and not flags and not full_bleed:
                 if b[0] <= p[0] or b[2] >= p[2] or b[1] <= p[1] or b[3] >= p[3]:
                     flags.append("TIGHT")
         if screen and (b[0] < screen[0] or b[2] > screen[2] or ((b[1] < screen[1] or b[3] > screen[3]) and not parent_scrolls)):
@@ -74,7 +80,7 @@ def walk(node, parent_bounds, parent_scrolls):
 
 walk(root, None, False)
 for flag, name, b in rows:
-    print(f"{flag:<22} {str(name)[:44]:<44} [{b[0]},{b[1]}][{b[2]},{b[3]}]  {b[2]-b[0]}x{b[3]-b[1]}")
+    print(f"{flag:<22} {str(name)[:110]:<44} [{b[0]},{b[1]}][{b[2]},{b[3]}]  {b[2]-b[0]}x{b[3]-b[1]}")
 print(f"{problems} problem(s)" if problems else "OK: nothing clipped")
 sys.exit(1 if problems else 0)
 PY
