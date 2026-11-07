@@ -107,7 +107,7 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
   in one shows up in the other. `CelesteLauncher.Run` publishes the values as `AppContext` keys `CelesteAndroid.<Key>` plus the file path
   (`CelesteAndroid.SettingsFile`); in game, `PortConfig.Set` updates the `AppContext` value (read every frame) and rewrites the file.
   Overlay, overlay corner, screen fit, integer scaling, frame cap, vsync and resolution scale apply immediately (`PortLive`); the
-  renderer applies on the next launch (the menu says so).
+  renderer is changed only in the launcher's Config and takes effect on the next Play.
 - **PORT menu** (`Celeste/patch_MenuOptions.cs`): an additive hook. The original menu is built by `orig_Create`; the hook then only appends a
   `PORT` sub-header and `TextMenu.Slider`/`OnOff` items (same style, font, sounds and controller navigation as VIDEO/AUDIO).
 - **Additive-hook rule.** Port patches must never replace or rewrite a vanilla method (`[MonoModReplace]`, or re-implementing a
