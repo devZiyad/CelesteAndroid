@@ -43,6 +43,9 @@ namespace CelesteAndroid
 			items.RemoveAt(items.Count - 1);
 			items.Insert(items.IndexOf(saveItem) + 1, exit);
 			menu.RecalculateSize();
+			// Marker for scripted checks: the pause menu's contents and state.
+			Console.WriteLine("[CelesteAndroid] menu pause: " + string.Join(", ", items.OfType<TextMenu.Button>().Select(b => b.Label))
+				+ " | paused=" + level.Paused.ToString().ToLowerInvariant());
 		}
 
 		/// <summary>The menu is queued in the entity list (not yet in the scene) right after Pause returns.</summary>

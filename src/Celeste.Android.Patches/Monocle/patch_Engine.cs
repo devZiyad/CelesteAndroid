@@ -84,6 +84,7 @@ namespace Monocle
 			orig_UpdateView();
 			PresentationParameters pp = GraphicsDevice.PresentationParameters;
 			PortView.Adjust(pp.BackBufferWidth, pp.BackBufferHeight, Width, Height, ViewPadding);
+			PortView.LogViewport(Viewport, pp.BackBufferWidth, pp.BackBufferHeight);
 		}
 
 		protected extern void orig_RenderCore();

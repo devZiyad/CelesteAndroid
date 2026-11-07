@@ -61,10 +61,13 @@ namespace Celeste
 		private static void AddPortSection(TextMenu menu)
 		{
 			menu.Add(new TextMenu.SubHeader("PORT"));
-			foreach (PortSetting setting in MenuOrder.Where(s => !s.NextLaunch))
+			PortSetting[] shown = MenuOrder.Where(s => !s.NextLaunch).ToArray();
+			foreach (PortSetting setting in shown)
 			{
 				menu.Add(CreateItem(setting));
 			}
+			// Marker for scripted checks (the in-game PORT section must hold only settings that apply live).
+			Console.WriteLine("[CelesteAndroid] menu PORT: " + string.Join(", ", shown.Select(s => s.Key)));
 			// Same as the end of the original menu: with more items than fit on screen, start scrolled to the selection.
 			if (menu.Height > menu.ScrollableMinSize)
 			{

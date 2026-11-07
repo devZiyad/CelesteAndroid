@@ -14,6 +14,20 @@ namespace CelesteAndroid
 		private static void Set(string property, object value) =>
 			typeof(Engine).GetProperty(property, Static)!.GetSetMethod(true)!.Invoke(null, new[] { value });
 
+		private static string lastViewport = "";
+
+		/// <summary>Logs the game viewport rectangle whenever it changes (a marker for scripted checks: "[CelesteAndroid] viewport x,y,w,h ...").</summary>
+		public static void LogViewport(Viewport viewport, int backWidth, int backHeight)
+		{
+			string text = $"viewport {viewport.X},{viewport.Y},{viewport.Width},{viewport.Height} backbuffer {backWidth}x{backHeight} fit={PortConfig.ScreenFit.ToString().ToLowerInvariant()} integer={PortConfig.IntegerScaling.ToString().ToLowerInvariant()}";
+			if (text == lastViewport)
+			{
+				return;
+			}
+			lastViewport = text;
+			Console.WriteLine("[CelesteAndroid] " + text);
+		}
+
 		/// <summary>Called after the original UpdateView (which already fitted 16:9 and applied ViewPadding).</summary>
 		public static void Adjust(int backWidth, int backHeight, int width, int height, int padding)
 		{

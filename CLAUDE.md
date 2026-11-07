@@ -52,6 +52,12 @@ See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
 ## Launcher UI
 - Every new or changed launcher screen or dialog must be screenshot-checked on the phone with each control focused (gamepad keys), and nothing may be clipped (buttons, focus outlines, text). No fixed heights: use `UiKit` (`Pill`, `ButtonParams`, `NoClip`), wrap_content with margin for the focus outline, and a ScrollView where content may not fit.
 
+## Image reads (save usage)
+- Minimize image reads. Launcher UI checks: `scripts/check-ui.sh` (uses `adb shell uiautomator dump`) reports each control's bounds and focus and flags anything clipped by its parent or the screen; no screenshots for clipping or focus checks.
+- Game checks: logcat markers (`[CelesteAndroid] ...` lines for menu contents, overlay state, screen-fit viewport rect, pause state) plus scripted pixel measurements on the PC (ImageMagick/PIL on the screenshot file; never read the image into context).
+- Read an image only when a scripted check fails or a visual cannot be verified otherwise, and then downscale to <= 800 px wide JPEG and crop to the relevant region first.
+- Never read the same screen twice to "confirm": trust the scripted check.
+
 ## Phone connectivity
 - Never disable the phone's Wi-Fi or mobile data (`svc wifi/data disable`, airplane mode, ...): wireless adb is the only link and it may not come back. For offline checks, block only the app's network (per-app rule) or have the user do the offline step.
 
