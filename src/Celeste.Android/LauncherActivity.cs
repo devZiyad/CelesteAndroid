@@ -111,8 +111,14 @@ namespace CelesteAndroid
 			if (!busy && Intent!.GetBooleanExtra("steam", false))
 			{
 				bool record = Intent.GetBooleanExtra(SteamActivity.ExtraRecordManifest, false);
+				bool force = Intent.GetBooleanExtra(SteamActivity.ExtraForceLogin, false);
+				bool showError = Intent.GetBooleanExtra(SteamActivity.ExtraShowError, false);
 				Intent.RemoveExtra("steam");
-				StartSteam(record);
+				var steamIntent = new Intent(this, typeof(SteamActivity));
+				if (record) steamIntent.PutExtra(SteamActivity.ExtraRecordManifest, true);
+				if (force) steamIntent.PutExtra(SteamActivity.ExtraForceLogin, true);
+				if (showError) steamIntent.PutExtra(SteamActivity.ExtraShowError, true);
+				StartActivityForResult(steamIntent, RequestSteam);
 			}
 			// APK pessoal: o jogo já vem dentro do APK; instala sozinho na primeira abertura.
 			else if (!busy && !GameInstaller.IsInstalled(this) && GameInstaller.HasEmbeddedGame(this))

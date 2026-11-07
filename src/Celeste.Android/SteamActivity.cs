@@ -43,6 +43,10 @@ namespace CelesteAndroid
 		private const string LogTag = "CelesteSteam";
 		private const string SteamPackage = "com.valvesoftware.android.steam.community";
 		public const string ExtraRecordManifest = "recordManifest";
+		/// <summary>Depuração (adb): ignora a sessão guardada (sem apagá-la) para mostrar as telas de login.</summary>
+		public const string ExtraForceLogin = "forceLogin";
+		/// <summary>Depuração (adb): mostra a tela de erro para conferir o layout.</summary>
+		public const string ExtraShowError = "showError";
 
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
@@ -96,11 +100,16 @@ namespace CelesteAndroid
 		{
 			try
 			{
+				if (Intent!.GetBooleanExtra(ExtraShowError, false))
+				{
+					await ShowErrorAsync("Disconnected from Steam. (debug preview of the error screen)").ConfigureAwait(false);
+					return;
+				}
 				SetScreen(Screen.Message, "Install from Steam", "Connecting to Steam…");
 				session = new SteamSession(LogLine);
 				await session.ConnectAsync(ct).ConfigureAwait(false);
 
-				(string Account, string RefreshToken)? stored = SteamTokenStore.Load(this);
+				(string Account, string RefreshToken)? stored = Intent!.GetBooleanExtra(ExtraForceLogin, false) ? null : SteamTokenStore.Load(this);
 				bool loggedOn = false;
 				if (stored != null)
 				{
