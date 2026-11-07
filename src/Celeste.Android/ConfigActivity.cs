@@ -32,18 +32,18 @@ namespace CelesteAndroid
 
 		/// <summary>Result extras: what the launcher should do (<see cref="ExtraAction"/>) and with which picked file or folder (the intent data).</summary>
 		public const string ExtraAction = "action";
-		public const string ActionImportSavesFolder = "import_saves_folder", ActionImportSavesZip = "import_saves_zip",
+		public const string ActionImportSavesFolder = "import_saves_folder",
 			ActionExportSavesFolder = "export_saves_folder", ActionExportSavesZip = "export_saves_zip",
-			ActionReimportFolder = "reimport_folder", ActionReimportZip = "reimport_zip", ActionDelete = "delete";
+			ActionReimportFolder = "reimport_folder", ActionDelete = "delete";
 
-		private const int ReqImportSavesFolder = 11, ReqImportSavesZip = 12, ReqExportSavesFolder = 13, ReqExportSavesZip = 14, ReqReimportFolder = 15, ReqReimportZip = 16;
+		private const int ReqImportSavesFolder = 11, ReqExportSavesFolder = 13, ReqExportSavesZip = 14, ReqReimportFolder = 15;
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
 
 		private readonly Dictionary<View, (PortSetting Setting, TextView Value)> rows = new();
 		private View? firstRow;
 		private TextView message = null!, accountText = null!;
-		private View signOutRow = null!, switchRow = null!, deleteRow = null!, reimportFolderRow = null!, reimportZipRow = null!;
+		private View signOutRow = null!, switchRow = null!, deleteRow = null!, reimportFolderRow = null!;
 
 		protected override string Tag => LogTag;
 		protected override View? InitialFocus() => firstRow;
@@ -74,11 +74,9 @@ namespace CelesteAndroid
 			string? action = requestCode switch
 			{
 				ReqImportSavesFolder => ActionImportSavesFolder,
-				ReqImportSavesZip => ActionImportSavesZip,
 				ReqExportSavesFolder => ActionExportSavesFolder,
 				ReqExportSavesZip => ActionExportSavesZip,
 				ReqReimportFolder => ActionReimportFolder,
-				ReqReimportZip => ActionReimportZip,
 				_ => null,
 			};
 			if (action != null)
@@ -96,15 +94,6 @@ namespace CelesteAndroid
 
 		private void PickFolder(int request) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), request);
 
-		private void PickZip(int request)
-		{
-			var intent = new Intent(Intent.ActionOpenDocument);
-			intent.AddCategory(Intent.CategoryOpenable);
-			intent.SetType("*/*");
-			intent.PutExtra(Intent.ExtraMimeTypes, new[] { "application/zip", "application/x-zip-compressed" });
-			StartActivityForResult(intent, request);
-		}
-
 		private void CreateZip(int request)
 		{
 			var intent = new Intent(Intent.ActionCreateDocument);
@@ -119,7 +108,6 @@ namespace CelesteAndroid
 			bool installed = GameInstaller.IsInstalled(this);
 			deleteRow.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
 			reimportFolderRow.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
-			reimportZipRow.Visibility = installed ? ViewStates.Visible : ViewStates.Gone;
 			string? name = SteamAccount.Name(this);
 			accountText.Text = name == null ? "Not signed in to Steam" : "Signed in as " + name;
 			signOutRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
@@ -203,17 +191,14 @@ namespace CelesteAndroid
 
 			list.AddView(Section("Saves"), SectionParams());
 			list.AddView(ActionRow("Import saves from a folder", "ImportSavesFolder", () => PickFolder(ReqImportSavesFolder)), RowParams());
-			list.AddView(ActionRow("Import saves from a .zip", "ImportSavesZip", () => PickZip(ReqImportSavesZip)), RowParams());
 			list.AddView(ActionRow("Export saves to a folder", "ExportSavesFolder", () => PickFolder(ReqExportSavesFolder)), RowParams());
 			list.AddView(ActionRow("Export saves to a .zip", "ExportSavesZip", () => CreateZip(ReqExportSavesZip)), RowParams());
 
 			list.AddView(Section("Game files"), SectionParams());
 			list.AddView(ActionRow("Check for updates", "CheckForUpdates", () =>
 				StartActivity(new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraUpdate, true))), RowParams());
-			reimportFolderRow = ActionRow("Re-import from a folder", "ReimportFolder", () => PickFolder(ReqReimportFolder));
+			reimportFolderRow = ActionRow("Re-import from folder", "ReimportFolder", () => PickFolder(ReqReimportFolder));
 			list.AddView(reimportFolderRow, RowParams());
-			reimportZipRow = ActionRow("Re-import from a .zip", "ReimportZip", () => PickZip(ReqReimportZip));
-			list.AddView(reimportZipRow, RowParams());
 			deleteRow = ActionRow("Delete game files", "DeleteGameFiles", () => Hand(ActionDelete));
 			list.AddView(deleteRow, RowParams());
 
@@ -231,9 +216,6 @@ namespace CelesteAndroid
 			scroll.AddView(list);
 			column.AddView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
-			var hint = Text("D-pad / stick  move        ‹ ›  change value        A  next value        B  back", 12,
-				Color.Argb(150, 255, 255, 255), TypefaceStyle.Normal);
-			column.AddView(hint, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(6) });
 			return root;
 		}
 
@@ -248,7 +230,7 @@ namespace CelesteAndroid
 			string name = setting?.Key ?? "ResetDefaults";
 			MakeFocusable(row, name);
 
-			var label = Text(setting == null ? "Reset to defaults" : setting.Label + (setting.NextLaunch ? " (applies on the next Play)" : ""), 17, setting == null ? Accent : Color.White, TypefaceStyle.Normal);
+			var label = Text(setting == null ? "Reset to defaults" : setting.Label, 17, setting == null ? Accent : Color.White, TypefaceStyle.Normal);
 			row.AddView(label, new LinearLayout.LayoutParams(0, -2, 1f));
 			if (setting != null)
 			{

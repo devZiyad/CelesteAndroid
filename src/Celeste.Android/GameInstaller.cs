@@ -9,7 +9,6 @@ using Android.Graphics;
 using Android.Provider;
 using Android.Util;
 using CelesteAndroid.Patcher;
-using Microsoft.Win32.SafeHandles;
 using Path = System.IO.Path;
 using Uri = Android.Net.Uri;
 
@@ -17,7 +16,7 @@ namespace CelesteAndroid
 {
 	/// <summary>
 	/// Imports the user's game files into the app's internal storage and prepares everything to run:
-	/// copy (folder, .zip or the personal APK's assets) → MonoMod patch → side-bar background.
+	/// copy (folder or the personal APK's assets) → MonoMod patch → side-bar background.
 	/// </summary>
 	public sealed class GameInstaller
 	{
@@ -67,28 +66,6 @@ namespace CelesteAndroid
 
 			CopyAll(files.Select(f => (f.relative, f.doc.Size,
 				(Func<Stream>)(() => resolver.OpenInputStream(DocumentsContract.BuildDocumentUriUsingTree(treeUri, f.doc.Id)!)!))));
-		}
-
-		/// <summary>.zip chosen by the user (e.g. the Linux zip from itch.io).</summary>
-		public void ImportZip(Uri zipUri)
-		{
-			progress("Reading the .zip…", -1);
-			using var pfd = context.ContentResolver!.OpenFileDescriptor(zipUri, "r")
-				?? throw new InstallException("Couldn't open the file.");
-			using var stream = new FileStream(new SafeFileHandle(pfd.DetachFd(), ownsHandle: true), FileAccess.Read);
-			using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
-
-			ZipArchiveEntry exe = zip.Entries
-				.Where(e => e.Name.Equals("Celeste.exe", StringComparison.OrdinalIgnoreCase))
-				.OrderBy(e => e.FullName.Length)
-				.FirstOrDefault() ?? throw new InstallException("This .zip doesn't contain Celeste.exe.");
-			string prefix = exe.FullName[..^exe.Name.Length];
-			CheckFnaBuild(zip.GetEntry(prefix + "FNA.dll") != null);
-
-			var entries = zip.Entries
-				.Where(e => e == exe || (e.FullName.StartsWith(prefix + "Content/", StringComparison.Ordinal) && e.Name.Length > 0))
-				.ToList();
-			CopyAll(entries.Select(e => (e.FullName[prefix.Length..], e.Length, (Func<Stream>)e.Open)));
 		}
 
 		/// <summary>Personal APK: copies the game embedded in the assets.</summary>
@@ -184,23 +161,6 @@ namespace CelesteAndroid
 			return ImportSaveFiles(found);
 		}
 
-		/// <summary>Saves from a .zip (the files may sit at the top or in a Saves/ folder).</summary>
-		public int ImportSavesFromZip(Uri zipUri)
-		{
-			progress("Reading the .zip…", -1);
-			using Stream input = context.ContentResolver!.OpenInputStream(zipUri) ?? throw new InstallException("Couldn't open the file.");
-			using var zip = new ZipArchive(input, ZipArchiveMode.Read);
-			var found = new List<(string Name, byte[] Data)>();
-			foreach (ZipArchiveEntry entry in zip.Entries.Where(e => e.Name.Length > 0 && IsSaveFileName(e.Name)))
-			{
-				using Stream stream = entry.Open();
-				using var memory = new MemoryStream();
-				stream.CopyTo(memory);
-				found.Add((entry.Name, memory.ToArray()));
-			}
-			return ImportSaveFiles(found);
-		}
-
 		/// <summary>Validates every file first (nothing is touched if one is bad), backs up the current saves, then overwrites.</summary>
 		private int ImportSaveFiles(List<(string Name, byte[] Data)> incoming)
 		{
@@ -254,7 +214,7 @@ namespace CelesteAndroid
 			{
 				throw new InstallException(
 					"This is the XNA version of Celeste. On Steam, enable the \"opengl\" beta " +
-					"(Properties → Betas) and copy the folder again, or use the Linux .zip from itch.io.");
+					"(Properties → Betas) and copy the folder again, or use the Linux build from itch.io.");
 			}
 		}
 

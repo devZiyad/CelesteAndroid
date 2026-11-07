@@ -31,7 +31,6 @@ namespace CelesteAndroid
 	public class LauncherActivity : ControllerActivity
 	{
 		private const int RequestFolder = 1;
-		private const int RequestZip = 2;
 		private const int RequestConfig = 3;
 		private const int RequestSteam = 4;
 		private const string LogTag = "CelesteLauncher";
@@ -46,7 +45,6 @@ namespace CelesteAndroid
 		private TextView steamButton = null!;
 		private TextView configButton = null!;
 		private TextView importFolder = null!;
-		private TextView openZip = null!;
 		private LinearLayout importRow = null!;
 		private LinearLayout progressBox = null!;
 		private ProgressBar progressBar = null!;
@@ -149,8 +147,8 @@ namespace CelesteAndroid
 					Play();
 				}
 			}
-			// Development (adb shell am start ... --es debugSaves "export_zip:/path/saves.zip" | "import_zip:/path/saves.zip"): runs the same
-			// saves export/import as the Config screen on a file path under the app's external files folder (no file picker needed).
+			// Development (adb shell am start ... --es debugSaves "export_zip:/path/saves.zip"): runs the same saves export as the Config
+			// screen on a file path under the app's external files folder (no file picker needed).
 			if (!busy && Intent!.GetStringExtra("debugSaves") is string debugSaves && debugSaves.IndexOf(':') > 0)
 			{
 				Intent.RemoveExtra("debugSaves");
@@ -158,8 +156,6 @@ namespace CelesteAndroid
 				Uri debugUri = Uri.FromFile(new Java.IO.File(debugSaves[(colon + 1)..]))!;
 				if (debugSaves[..colon] == "export_zip")
 					RunJob(installer => $"✓  Exported {installer.ExportSavesToZip(debugUri)} save file(s)");
-				else if (debugSaves[..colon] == "import_zip")
-					RunJob(installer => $"✓  Imported {installer.ImportSavesFromZip(debugUri)} save file(s); the previous saves were backed up");
 			}
 			// Development (adb shell am start ... --ez steam true [--ez forceLogin true | --ez showError true]): opens the Steam install.
 			if (!busy && Intent!.GetBooleanExtra("steam", false))
@@ -295,11 +291,7 @@ namespace CelesteAndroid
 			importFolder = PillButton("Import folder", filled: false, small: true);
 			importFolder.Click += (_, _) => PickFolder();
 			MakeFocusable(importFolder, "ImportFolder");
-			openZip = PillButton("Import .zip", filled: false, small: true);
-			openZip.Click += (_, _) => PickZip();
-			MakeFocusable(openZip, "ImportZip");
 			importRow.AddView(importFolder, UiKit.ButtonParams(this, 126, marginTop: 6));
-			importRow.AddView(openZip, UiKit.ButtonParams(this, 126, marginTop: 6));
 			panel.AddView(importRow);
 
 			configButton = PillButton("Config", filled: false, small: true);
@@ -315,11 +307,6 @@ namespace CelesteAndroid
 			progressBox.AddView(progressBar, new LinearLayout.LayoutParams(Dp(260), Dp(8)));
 			progressBox.AddView(progressText, Margins(top: 6));
 			panel.AddView(progressBox, Margins(top: 12));
-
-			var hint = Text("A  select     B  back     D-pad / stick  move", 12, Color.Argb(150, 255, 255, 255), TypefaceStyle.Normal);
-			var hintParams = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent,
-				GravityFlags.Bottom | GravityFlags.End) { RightMargin = Dp(28), BottomMargin = Dp(20) };
-			root.AddView(hint, hintParams);
 
 			return root;
 		}
@@ -391,7 +378,6 @@ namespace CelesteAndroid
 			steamButton.Enabled = !busy;
 			importRow.Visibility = installed || busy || installing ? ViewStates.Gone : ViewStates.Visible;
 			importFolder.Enabled = !busy;
-			openZip.Enabled = !busy;
 			configButton.Enabled = !busy;
 			steamButton.Text = installing ? "Installing… (view progress)" : "Install from Steam";
 			if (installing)
@@ -413,7 +399,7 @@ namespace CelesteAndroid
 					statusIsHint = true;
 					status.Text = paused
 						? "Download paused: choose Install from Steam to resume."
-						: "Install Celeste from your Steam account, or import the folder of your PC copy / the Linux .zip.";
+						: "Install Celeste from your Steam account, or import the folder of your PC copy.";
 				}
 			}
 			EnsureFocus();
@@ -504,15 +490,6 @@ namespace CelesteAndroid
 			StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), RequestFolder);
 		}
 
-		private void PickZip()
-		{
-			var intent = new Intent(Intent.ActionOpenDocument);
-			intent.AddCategory(Intent.CategoryOpenable);
-			intent.SetType("*/*");
-			intent.PutExtra(Intent.ExtraMimeTypes, new[] { "application/zip", "application/x-zip-compressed" });
-			StartActivityForResult(intent, RequestZip);
-		}
-
 		protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
 		{
 			base.OnActivityResult(requestCode, resultCode, data);
@@ -534,8 +511,6 @@ namespace CelesteAndroid
 				return;
 			if (requestCode == RequestFolder)
 				RunInstall(installer => installer.ImportFolder(uri));
-			else if (requestCode == RequestZip)
-				RunInstall(installer => installer.ImportZip(uri));
 		}
 
 		/// <summary>Config hands back what needs the launcher's progress UI (imports, exports, delete).</summary>
@@ -553,9 +528,6 @@ namespace CelesteAndroid
 				case ConfigActivity.ActionImportSavesFolder when uri != null:
 					RunJob(installer => $"✓  Imported {installer.ImportSavesFromFolder(uri)} save file(s); the previous saves were backed up");
 					break;
-				case ConfigActivity.ActionImportSavesZip when uri != null:
-					RunJob(installer => $"✓  Imported {installer.ImportSavesFromZip(uri)} save file(s); the previous saves were backed up");
-					break;
 				case ConfigActivity.ActionExportSavesFolder when uri != null:
 					RunJob(installer => $"✓  Exported {installer.ExportSavesToFolder(uri)} save file(s)");
 					break;
@@ -564,9 +536,6 @@ namespace CelesteAndroid
 					break;
 				case ConfigActivity.ActionReimportFolder when uri != null:
 					RunInstall(installer => installer.ImportFolder(uri));
-					break;
-				case ConfigActivity.ActionReimportZip when uri != null:
-					RunInstall(installer => installer.ImportZip(uri));
 					break;
 			}
 		}
