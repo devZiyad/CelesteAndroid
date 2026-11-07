@@ -1,29 +1,24 @@
+#pragma warning disable CS0626 // extern sem atributo: o MonoMod troca por orig_*
 using CelesteAndroid;
-using Monocle;
-using MonoMod;
 
 namespace Celeste
 {
 	class patch_Settings : Settings
 	{
+		public extern void orig_ApplyScreen();
+
 		/// <summary>
-		/// No Android o modo janela renderiza 320x180×escala e o sistema estica a imagem (distorce e borra):
-		/// sempre tela cheia, na resolução nativa. No desktop continua como no original.
+		/// No Android o jogo roda sempre em tela cheia, na resolução nativa (o modo janela renderiza 320x180×escala e o
+		/// sistema estica a imagem): força Fullscreen antes do ApplyScreen original, que então segue o ramo de tela cheia.
+		/// No desktop continua como no original.
 		/// </summary>
-		[MonoModReplace]
 		public new void ApplyScreen()
 		{
-			if (Fullscreen || HostConfig.IsAndroid)
+			if (HostConfig.IsAndroid)
 			{
 				Fullscreen = true;
-				Engine.ViewPadding = ViewportPadding;
-				Engine.SetFullscreen();
 			}
-			else
-			{
-				Engine.ViewPadding = 0;
-				Engine.SetWindowed(320 * WindowScale, 180 * WindowScale);
-			}
+			orig_ApplyScreen();
 		}
 	}
 }
