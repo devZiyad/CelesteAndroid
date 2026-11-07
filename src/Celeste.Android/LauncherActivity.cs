@@ -82,6 +82,8 @@ namespace CelesteAndroid
 			};
 			art.StartAnimation(zoom);
 
+			MaybeAutoplay(savedInstanceState);
+
 			// An install that was interrupted (process killed, reboot) resumes by itself; one that is running opens its screen.
 			if (InstallCoordinator.IsActive)
 				StartSteam();
@@ -90,6 +92,22 @@ namespace CelesteAndroid
 				try { InstallService.Start(this, pending == "update"); StartSteam(); }
 				catch (Exception e) { Log.Warn(LogTag, "could not resume the install now: " + e.Message); }
 			}
+		}
+
+		/// <summary>Autoplay is decided once per app process: coming back from the game ("Exit to launcher", the title Exit) must not start it again.</summary>
+		private static bool autoplayHandled;
+
+		/// <summary>Opening the app with the game ready and Autoplay on goes straight into the game.</summary>
+		private void MaybeAutoplay(Bundle? savedInstanceState)
+		{
+			if (autoplayHandled) return;
+			autoplayHandled = true;
+			if (savedInstanceState != null) return; // recreated by the system (e.g. the launcher process died while the game ran)
+			if (InstallCoordinator.IsActive || InstallCoordinator.PendingMode(this) != null || !GameInstaller.IsInstalled(this)) return;
+			if (PortSettings.GetValue(this, PortSettingsCatalog.Autoplay) != "true") return;
+			Log.Info(LogTag, "autoplay: starting game");
+			Play();
+			OverridePendingTransition(0, 0);
 		}
 
 		private Action<InstallStatus>? statusHandler;

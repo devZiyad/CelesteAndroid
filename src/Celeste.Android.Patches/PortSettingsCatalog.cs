@@ -59,9 +59,13 @@ namespace CelesteAndroid
 		public static readonly PortSetting IntegerScaling = new("IntegerScaling", "Integer scaling",
 			new[] { "Off", "On" }, new[] { "false", "true" }, 0);
 
+		/// <summary>When the game is ready, opening the app boots straight into it (the launcher is skipped).</summary>
+		public static readonly PortSetting Autoplay = new("Autoplay", "Autoplay",
+			new[] { "On", "Off" }, new[] { "true", "false" }, 0);
+
 		public static readonly PortSetting[] All =
 		{
-			Renderer, FrameCap, VSync, ResolutionScale, Overlay, OverlayCorner, ScreenFit, IntegerScaling,
+			Autoplay, Renderer, FrameCap, VSync, ResolutionScale, Overlay, OverlayCorner, ScreenFit, IntegerScaling,
 		};
 
 		public static PortSetting? Find(string key) =>

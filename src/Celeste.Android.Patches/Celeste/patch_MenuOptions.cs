@@ -53,7 +53,7 @@ namespace Celeste
 		{
 			PortSettingsCatalog.Overlay, PortSettingsCatalog.OverlayCorner, PortSettingsCatalog.ScreenFit,
 			PortSettingsCatalog.IntegerScaling, PortSettingsCatalog.FrameCap, PortSettingsCatalog.VSync,
-			PortSettingsCatalog.ResolutionScale, PortSettingsCatalog.Renderer,
+			PortSettingsCatalog.ResolutionScale, PortSettingsCatalog.Autoplay, PortSettingsCatalog.Renderer,
 		};
 
 		private static void AddPortSection(TextMenu menu)

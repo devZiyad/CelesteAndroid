@@ -71,6 +71,7 @@ namespace CelesteAndroid
 			{
 				PauseLevel();
 			}
+			PortExit.Tick();
 		}
 
 		private static void PauseLevel()
