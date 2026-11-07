@@ -39,7 +39,7 @@ namespace CelesteAndroid
 		private PowerManager.WakeLock? wakeLock;
 		private WifiManager.WifiLock? wifiLock;
 		private Task? worker;
-		private long lastNotify;
+		private long lastNotify, lastLog;
 		private InstallStage lastStage;
 
 		public static void Start(Context context, bool update) =>
@@ -284,6 +284,12 @@ namespace CelesteAndroid
 		{
 			if (!status.IsActive) return;
 			long now = SystemClock.ElapsedRealtime();
+			// A progress marker every 5 s in logcat (scripted checks use it to see the download advance with the screen off).
+			if (now - lastLog >= 5000 || status.Stage != lastStage)
+			{
+				lastLog = now;
+				Log.Info(LogTag, $"progress: {status.Stage} {status.Percent}% | {status.Step} | {status.Detail}");
+			}
 			if (status.Stage == lastStage && now - lastNotify < 1000) return;
 			lastNotify = now;
 			lastStage = status.Stage;
