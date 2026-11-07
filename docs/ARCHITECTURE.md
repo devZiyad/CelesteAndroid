@@ -95,3 +95,11 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
 - On-screen touch controls (fix FNA's touch device polling, then draw them in the pillarbox bars)
 - Everest (mod loader) support
 - More devices tested (Mali, Xclipse, Tensor)
+
+## Port settings, display modes and overlay
+
+- **Settings.** The launcher's *Port settings* screen (`PortSettingsActivity`, gamepad-navigable) stores the options in SharedPreferences (`port`). `CelesteLauncher.Run` publishes them as `AppContext` keys `CelesteAndroid.<Key>` (string values) and the patched game reads them through `PortConfig` (`Celeste.Android.Patches`). The renderer is applied before the game starts (`FNA3D_FORCE_DRIVER`). The desktop host fills the same keys from `port-settings.json` / `--settings file` / flags (see `PortOptions`) and sets `CelesteAndroid.Host=desktop`.
+- **Display modes.** On Android (`HostConfig.IsAndroid`) the game always runs fullscreen at the device's native resolution times *Resolution scale* (FNA3D upscales a smaller backbuffer on present). `Engine.SetWindowed`/`Settings.ApplyScreen` are redirected to fullscreen and the *Fullscreen* / *Window Scale* items are hidden in the Video menu. The desktop host keeps them.
+- **Screen fit.** `Engine.UpdateView` is post-processed by `PortView.Adjust` (stretch, integer scaling on the 320x180 pixel grid); `RenderCore` clears the bars black or draws the side art.
+- **Frame cap.** The game logic stays at a fixed 60 Hz (the physics depends on it). A cap of 30 skips every other draw; 60/90/120/unlimited all draw once per update, so they cannot exceed 60 fps.
+- **Overlay.** `PortOverlay.Draw` runs at the end of `Engine.RenderCore` (works in the desktop host too) and logs `[CelesteAndroid] fps ...` once per second. Applied settings are logged at startup as `[CelesteAndroid] setting name=value`.

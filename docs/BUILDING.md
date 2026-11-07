@@ -94,3 +94,15 @@ adb -s $ANDROID_SERIAL shell am start -n org.devziyad.celeste.debug/org.devziyad
 
 
 To force OpenGL ES: `--es driver OpenGL` on `GameActivity`, or the *Graphics* toggle in the launcher.
+
+## Port settings on the desktop host
+
+The desktop host reads the same options as the launcher's *Port settings* screen from `port-settings.json` next to the host binary (or `--settings <file>`), overridden by flags:
+
+```fish
+dotnet run --project src/Celeste.Desktop -- --overlay graph --corner topright --screen-fit blackbars --integer-scaling on --frame-cap 60 --vsync on --res-scale 1 --renderer vulkan
+```
+
+JSON keys: `renderer`, `frameCap`, `vsync`, `resolutionScale`, `overlay`, `overlayCorner`, `screenFit`, `integerScaling`.
+
+On the phone, `adb shell input keyevent` presses are released within a millisecond and the game polls input once per frame, so send held presses to drive the game (`adb shell input keyevent --duration 90 KEYCODE_C`; Celeste confirm = `C`, back = `X`).
