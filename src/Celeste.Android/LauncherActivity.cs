@@ -109,26 +109,34 @@ namespace CelesteAndroid
 			}
 		}
 
-		/// <summary>Registra o tamanho dos dados do app (files/ e shared_prefs/): prova, no logcat, que um deploy não os apagou.</summary>
+		/// <summary>
+		/// Registra o tamanho dos dados do app (files/ e shared_prefs/, com o nome de cada arquivo): prova, no logcat,
+		/// que um deploy não os apagou. "android.app.ActivityThread.IDS.xml" é do próprio Android (contador do
+		/// framework, reescrito a cada atualização) e fica de fora.
+		/// </summary>
 		private void LogDataInventory()
 		{
 			string? filesDir = FilesDir?.AbsolutePath;
 			string? prefsDir = filesDir == null ? null : System.IO.Path.Combine(System.IO.Path.GetDirectoryName(filesDir)!, "shared_prefs");
 			System.Threading.Tasks.Task.Run(() =>
 			{
-				static (int Files, long Bytes) Walk(string? dir)
+				static (int Files, long Bytes, string Names) Walk(string? dir)
 				{
-					if (dir == null || !Directory.Exists(dir)) return (0, 0);
-					int n = 0; long b = 0;
+					if (dir == null || !Directory.Exists(dir)) return (0, 0, "");
+					int n = 0; long b = 0; var names = new System.Collections.Generic.List<string>();
 					foreach (string f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
 					{
-						n++;
-						try { b += new FileInfo(f).Length; } catch (IOException) { }
+						string name = System.IO.Path.GetFileName(f);
+						if (name == "android.app.ActivityThread.IDS.xml") continue;
+						long len = 0;
+						try { len = new FileInfo(f).Length; } catch (IOException) { }
+						n++; b += len; names.Add($"{name}:{len}");
 					}
-					return (n, b);
+					names.Sort(StringComparer.Ordinal);
+					return (n, b, string.Join(",", names));
 				}
 				var files = Walk(filesDir); var prefs = Walk(prefsDir);
-				Log.Info(LogTag, $"data: files/ files={files.Files} bytes={files.Bytes}; shared_prefs/ files={prefs.Files} bytes={prefs.Bytes}");
+				Log.Info(LogTag, $"data: files/ files={files.Files} bytes={files.Bytes}; shared_prefs/ files={prefs.Files} bytes={prefs.Bytes} [{prefs.Names}]");
 			});
 		}
 
