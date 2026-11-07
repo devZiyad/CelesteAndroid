@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
-		<TargetFramework>net10.0-android</TargetFramework>
+		<!-- API 36: a mais nova suportada pelo workload android instalado (36.1.118). -->
+		<TargetFramework>net10.0-android36.0</TargetFramework>
 		<SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
 		<OutputType>Exe</OutputType>
 		<RootNamespace>CelesteAndroid</RootNamespace>

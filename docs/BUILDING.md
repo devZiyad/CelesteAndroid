@@ -90,4 +90,7 @@ The release package is `org.devziyad.celeste` ("Celeste (dev)") and the debug bu
 adb -s $ANDROID_SERIAL shell am start -n org.devziyad.celeste.debug/org.devziyad.celeste.LauncherActivity --ez repatch true
 ```
 
+`scripts/deploy-android.sh --play` starts the game right away (the launcher gets an `autoplay` extra); `--content` also pushes `Celeste.exe` and `Content/`, which a freshly installed package ID needs once. The launcher is controller-first: D-pad / left stick move the focus, A confirms, B exits; focus and key events are logged under the `CelesteLauncher` logcat tag.
+
+
 To force OpenGL ES: `--es driver OpenGL` on `GameActivity`, or the *Graphics* toggle in the launcher.
