@@ -51,3 +51,6 @@ See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
 
 ## Launcher UI
 - Every new or changed launcher screen or dialog must be screenshot-checked on the phone with each control focused (gamepad keys), and nothing may be clipped (buttons, focus outlines, text). No fixed heights: use `UiKit` (`Pill`, `ButtonParams`, `NoClip`), wrap_content with margin for the focus outline, and a ScrollView where content may not fit.
+
+## Phone connectivity
+- Never disable the phone's Wi-Fi or mobile data (`svc wifi/data disable`, airplane mode, ...): wireless adb is the only link and it may not come back. For offline checks, block only the app's network (per-app rule) or have the user do the offline step.
