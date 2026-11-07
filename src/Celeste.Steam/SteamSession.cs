@@ -76,7 +76,7 @@ namespace CelesteAndroid.Steam
 			DebugLog.AddListener(new DiagnosticListener(log));
 			DebugLog.Enabled = true;
 #endif
-			SteamConfiguration config = SteamConfiguration.Create(b => b.WithProtocolTypes(ProtocolTypes.WebSocket));
+			SteamConfiguration config = SteamConfiguration.Create(b => b.WithProtocolTypes(ProtocolTypes.Tcp));
 			client = new SteamClient(config);
 			callbacks = new CallbackManager(client);
 			user = client.GetHandler<SteamUser>()!;
