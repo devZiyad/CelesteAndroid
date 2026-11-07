@@ -15,7 +15,6 @@ namespace CelesteAndroid
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.GameActivity",
-		Label = "Celeste (dev)",
 		Process = ":game",
 		Exported = false,
 		Theme = "@style/Theme.Celeste",

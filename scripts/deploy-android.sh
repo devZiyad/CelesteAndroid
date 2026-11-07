@@ -2,7 +2,8 @@
 # Device dev loop: patches Celeste, builds/installs the APK and pushes the files.
 # Usage: scripts/deploy-android.sh [--content] [--no-launch] [--release]
 #   --content    also pushes the game's Content folder (1 GB; first time or when it changes)
-#   --release    install out/CelesteAndroid-<version>.apk (release-signed) instead of a debug build
+#   --release    install out/CelesteAndroid-<version>.apk (org.devziyad.celeste, release-signed) instead of the
+#                debug build (org.devziyad.celeste.debug, "Celeste (debug)"); both can be installed together
 # Uses the device in $ANDROID_SERIAL.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/_env.sh"
@@ -17,7 +18,7 @@ for a in "$@"; do
 	esac
 done
 [ -n "${ANDROID_SERIAL:-}" ] || die "ANDROID_SERIAL is not set"
-PKG=org.devziyad.celeste
+if [ "$RELEASE" = 1 ]; then PKG=org.devziyad.celeste; else PKG=org.devziyad.celeste.debug; fi
 ADB_BIN="$ANDROID_HOME/platform-tools/adb"
 # Wireless adb can drop and re-register between steps: wait for the device and retry before each call.
 adb_s() {
@@ -64,5 +65,5 @@ fi
 
 if [ "$LAUNCH" = 1 ]; then
 	"${ADB[@]}" logcat -c
-	"${ADB[@]}" shell am start -n "$PKG/.LauncherActivity"
+	"${ADB[@]}" shell am start -n "$PKG/org.devziyad.celeste.LauncherActivity"
 fi

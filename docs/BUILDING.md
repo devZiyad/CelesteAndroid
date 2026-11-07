@@ -84,10 +84,10 @@ scripts/deploy-android.sh                  # afterwards: patch + debug APK + pat
 adb -s $ANDROID_SERIAL logcat -s CelesteAndroid DOTNET SDL SDL/GPU fmod
 ```
 
-The package is `org.devziyad.celeste` ("Celeste (dev)"), so it installs alongside the original app. The debug build is `run-as`-able, so the script copies files straight into the app's private storage. To regenerate the patch and background on the device without re-importing:
+The release package is `org.devziyad.celeste` ("Celeste (dev)") and the debug build is `org.devziyad.celeste.debug` ("Celeste (debug)"); `deploy-android.sh` uses the debug one unless `--release`. They install alongside the original app. The debug build is `run-as`-able, so the script copies files straight into the app's private storage. To regenerate the patch and background on the device without re-importing:
 
 ```
-adb -s $ANDROID_SERIAL shell am start -n org.devziyad.celeste/.LauncherActivity --ez repatch true
+adb -s $ANDROID_SERIAL shell am start -n org.devziyad.celeste.debug/org.devziyad.celeste.LauncherActivity --ez repatch true
 ```
 
 To force OpenGL ES: `--es driver OpenGL` on `GameActivity`, or the *Graphics* toggle in the launcher.

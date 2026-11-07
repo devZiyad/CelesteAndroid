@@ -24,6 +24,11 @@
 		<!-- Os bindings gerados do Java do SDL não seguem nossas regras de nulabilidade. -->
 		<NoWarn>$(NoWarn);CS8618;CS8625;CS8766;CS1572;BG8A04;BG8A00;BG8403</NoWarn>
 	</PropertyGroup>
+	<PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+		<!-- Debug instala ao lado do Release: outro ID e outro rótulo. -->
+		<ApplicationId>org.devziyad.celeste.debug</ApplicationId>
+		<ApplicationTitle>Celeste (debug)</ApplicationTitle>
+	</PropertyGroup>
 	<PropertyGroup>
 		<!-- Arte extraída dos arquivos do jogo do usuário por scripts/generate-game-art.sh (fora do git). -->
 		<GameArtDir>$(MSBuildThisFileDirectory)GameArt\</GameArtDir>

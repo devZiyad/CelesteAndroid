@@ -21,7 +21,6 @@ namespace CelesteAndroid
 	/// </summary>
 	[Activity(
 		Name = "org.devziyad.celeste.LauncherActivity",
-		Label = "Celeste (dev)",
 		MainLauncher = true,
 		Exported = true,
 		Theme = "@style/Theme.Celeste",
