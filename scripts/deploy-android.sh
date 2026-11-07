@@ -44,7 +44,8 @@ if [ "$RELEASE" = 1 ]; then
 	APK="$(ls -t "$ROOT"/out/CelesteAndroid-*.apk | grep -v personal | head -n1)"
 else
 	dotnet build "$ROOT/src/Celeste.Android" -c Debug -nologo -v q >&2
-	APK="$(find "$ROOT/src/Celeste.Android/bin/Debug" -name '*-Signed.apk' | head -n1)"
+	# Newest one: older target-framework folders may hold stale APKs.
+	APK="$(find "$ROOT/src/Celeste.Android/bin/Debug" -name '*-Signed.apk' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
 fi
 "${ADB[@]}" install -r "$APK"
 "${ADB[@]}" shell am force-stop "$PKG"

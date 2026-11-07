@@ -117,14 +117,12 @@ namespace CelesteAndroid
 
 		private static string Describe(View? view) => view?.ContentDescription ?? view?.GetType().Name ?? "none";
 
-		/// <summary>Torna a view alcançável por D-pad/analógico e dá um leve zoom enquanto focada.</summary>
+		/// <summary>Torna a view alcançável por D-pad/analógico (o destaque do foco é o contorno do fundo; sem zoom, que cortava as pontas).</summary>
 		private void Focusable(View view, string name)
 		{
 			view.ContentDescription = name;
 			view.Focusable = true;
 			view.FocusableInTouchMode = true;
-			view.FocusChange += (_, e) =>
-				view.Animate()!.ScaleX(e.HasFocus ? 1.05f : 1f).ScaleY(e.HasFocus ? 1.05f : 1f).SetDuration(120).Start();
 		}
 
 		private void EnsureFocus()
