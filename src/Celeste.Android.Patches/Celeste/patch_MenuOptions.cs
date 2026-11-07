@@ -1,6 +1,7 @@
 #pragma warning disable CS0626 // extern without an attribute: MonoMod swaps it for orig_*
 using System;
 using System.Collections;
+using System.Linq;
 using System.Reflection;
 using CelesteAndroid;
 using FMOD.Studio;
@@ -48,18 +49,19 @@ namespace Celeste
 			menu.RecalculateSize();
 		}
 
-		// Menu order: what applies immediately first, what only applies on the next launch last.
+		// The in-game PORT section lists only what applies while playing. Anything that needs a restart (Renderer) stays in the
+		// launcher's Config > Port settings and takes effect on the next Play. Autoplay is a launcher behaviour with no restart involved.
 		private static readonly PortSetting[] MenuOrder =
 		{
 			PortSettingsCatalog.Overlay, PortSettingsCatalog.OverlayCorner, PortSettingsCatalog.ScreenFit,
 			PortSettingsCatalog.IntegerScaling, PortSettingsCatalog.FrameCap, PortSettingsCatalog.VSync,
-			PortSettingsCatalog.ResolutionScale, PortSettingsCatalog.Autoplay, PortSettingsCatalog.Renderer,
+			PortSettingsCatalog.ResolutionScale, PortSettingsCatalog.Autoplay,
 		};
 
 		private static void AddPortSection(TextMenu menu)
 		{
 			menu.Add(new TextMenu.SubHeader("PORT"));
-			foreach (PortSetting setting in MenuOrder)
+			foreach (PortSetting setting in MenuOrder.Where(s => !s.NextLaunch))
 			{
 				menu.Add(CreateItem(setting));
 			}
@@ -72,7 +74,7 @@ namespace Celeste
 
 		private static TextMenu.Item CreateItem(PortSetting setting)
 		{
-			string label = setting.Label + (setting.NextLaunch ? " (applies on next launch)" : "");
+			string label = setting.Label;
 			int current = setting.IndexOf(PortConfig.Get(setting));
 			void Apply(int index)
 			{
