@@ -215,7 +215,21 @@ namespace CelesteAndroid
 					Task<SteamAuthResult> qr = session!.LoginWithQrAsync(this, qrCts.Token);
 					Task finished = await Task.WhenAny(qr, switchToCredentials.Task).ConfigureAwait(false);
 					if (finished == qr)
-						return await qr.ConfigureAwait(false);
+					{
+						try
+						{
+							return await qr.ConfigureAwait(false);
+						}
+						catch (Exception e) when (e is SteamKit2.AsyncJobFailedException or SteamException or SteamKit2.Authentication.AuthenticationException && !ct.IsCancellationRequested)
+						{
+							// A conexão caiu (ou o desafio expirou) enquanto esperava a aprovação: reconecta e gera um QR novo.
+							LogLine("steam: connection lost while waiting for approval, reconnecting with a new QR code");
+							session.Dispose();
+							session = new SteamSession(LogLine);
+							await session.ConnectAsync(ct).ConfigureAwait(false);
+							continue;
+						}
+					}
 					qrCts.Cancel();
 					try { await qr.ConfigureAwait(false); } catch (OperationCanceledException) { }
 				}
