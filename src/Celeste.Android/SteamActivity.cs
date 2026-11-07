@@ -42,7 +42,8 @@ namespace CelesteAndroid
 	{
 		private const string LogTag = "CelesteSteam";
 		private const string SteamPackage = "com.valvesoftware.android.steam.community";
-		public const string ExtraRecordManifest = "recordManifest";
+		/// <summary>"Check for updates": a no-op when the installed manifest is already the latest.</summary>
+		public const string ExtraUpdate = "update";
 		/// <summary>Debug (adb): ignores the stored session (without deleting it) to show the login screens.</summary>
 		public const string ExtraForceLogin = "forceLogin";
 		/// <summary>Debug (adb): shows the error screen to check the layout.</summary>
@@ -68,27 +69,38 @@ namespace CelesteAndroid
 		private TaskCompletionSource<bool>? switchToCredentials, switchToQr;
 		private TaskCompletionSource<(string User, string Pass)>? credentialsSubmitted;
 		private View? firstFocus;
-		private bool finishing;
+		private bool finishing, installDone, updateMode;
+		private Screen currentScreen = Screen.Message;
+		private Action<InstallStatus>? statusHandler;
 
 		protected override string Tag => LogTag;
 		protected override View? InitialFocus() => firstFocus ?? cancelButton;
-		protected override void OnBackButton() => CancelAndClose();
+		protected override void OnBackButton()
+		{
+			// Leaving while the service works does not stop the download: it goes on in the background.
+			if (InstallCoordinator.IsActive || installDone) CancelAndClose(stopInstall: false);
+			else CancelAndClose(stopInstall: true);
+		}
 
 		private void LogLine(string line) => Log.Info("CelesteAndroid", "[CelesteAndroid] " + line);
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
-			Window!.AddFlags(WindowManagerFlags.KeepScreenOn); // the download must not stop when the screen turns off
+			updateMode = Intent!.GetBooleanExtra(ExtraUpdate, false);
 			View root = BuildLayout();
 			SetContentView(root);
 			WatchFocus(root);
 			HideSystemBars();
-			_ = Task.Run(() => PipelineAsync(cts.Token));
+			RequestNotificationPermission();
+			statusHandler = status => RunOnUiThread(() => OnInstallStatus(status));
+			InstallCoordinator.Changed += statusHandler;
+			Begin();
 		}
 
 		protected override void OnDestroy()
 		{
+			InstallCoordinator.Changed -= statusHandler;
 			cts.Cancel();
 			session?.Dispose();
 			base.OnDestroy();
@@ -96,109 +108,105 @@ namespace CelesteAndroid
 
 		#region Flow
 
-		private async Task PipelineAsync(CancellationToken ct)
+		/// <summary>Opens the screen on a progress that is already running, or starts one (sign-in first when there is no session).</summary>
+		private void Begin()
+		{
+			if (Intent!.GetBooleanExtra(ExtraShowError, false))
+			{
+				_ = ShowErrorAsync("Disconnected from Steam. (debug preview of the error screen)");
+				return;
+			}
+			if (InstallCoordinator.IsActive)
+			{
+				OnInstallStatus(InstallCoordinator.Current); // reopened while the service works: show it live
+				return;
+			}
+			if (Intent.GetBooleanExtra(ExtraForceLogin, false) || !SteamTokenStore.HasSession(this))
+				_ = Task.Run(() => SignInThenInstallAsync(cts.Token));
+			else
+				StartInstall();
+		}
+
+		private void StartInstall()
+		{
+			SetScreen(Screen.Progress, updateMode ? "Updating Celeste" : "Installing Celeste", "Starting…");
+			bar.Indeterminate = true;
+			InstallService.Start(this, updateMode);
+		}
+
+		/// <summary>Interactive part only: get a Steam session (and keep its token); the foreground service does the rest.</summary>
+		private async Task SignInThenInstallAsync(CancellationToken ct)
 		{
 			try
 			{
-				if (Intent!.GetBooleanExtra(ExtraShowError, false))
-				{
-					await ShowErrorAsync("Disconnected from Steam. (debug preview of the error screen)").ConfigureAwait(false);
-					return;
-				}
 				SetScreen(Screen.Message, "Install from Steam", "Connecting to Steam…");
 				session = new SteamSession(LogLine);
 				await session.ConnectAsync(ct).ConfigureAwait(false);
-
-				(string Account, string RefreshToken)? stored = Intent!.GetBooleanExtra(ExtraForceLogin, false) ? null : SteamTokenStore.Load(this);
-				bool loggedOn = false;
-				if (stored != null)
-				{
-					SetScreen(Screen.Message, "Install from Steam", "Signing in…");
-					try
-					{
-						await session.LogOnAsync(stored.Value.Account, stored.Value.RefreshToken, ct).ConfigureAwait(false);
-						loggedOn = true;
-						LogLine("steam: signed in with the stored session");
-					}
-					catch (SteamException e)
-					{
-						LogLine("steam: the stored session was rejected (" + e.Message + ")");
-						SteamTokenStore.Clear(this);
-						session.Dispose();
-						session = new SteamSession(LogLine);
-						await session.ConnectAsync(ct).ConfigureAwait(false);
-					}
-				}
-				if (!loggedOn)
-				{
-					SteamAuthResult auth = await SignInAsync(ct).ConfigureAwait(false);
-					SteamTokenStore.Save(this, auth.AccountName, auth.RefreshToken);
-					LogLine("steam: login successful, session stored encrypted (Android Keystore)");
-					SetScreen(Screen.Message, "Install from Steam", "Signing in…");
-					await session.LogOnAsync(auth.AccountName, auth.RefreshToken, ct).ConfigureAwait(false);
-				}
-
-				SetScreen(Screen.Message, "Install from Steam", "Checking that your account owns Celeste…");
-				if (!await session.OwnsGameAsync(ct).ConfigureAwait(false))
-				{
-					LogLine($"steam: ownership NOT confirmed for app {SteamSession.AppId}");
-					await ShowErrorAsync("This Steam account doesn't own Celeste, and no family-shared copy was found.").ConfigureAwait(false);
-					return;
-				}
-				LogLine($"steam: ownership confirmed (app {SteamSession.AppId} is in this account's licenses, own or family-shared)");
-
-				SetScreen(Screen.Message, "Install from Steam", "Getting the file list…");
-				(ManifestSnapshot manifest, IChunkSource chunks) = await session.GetManifestAsync(ct).ConfigureAwait(false);
-				FileSelection.ValidateIsFnaBuild(manifest);
-				SelectionResult selection = FileSelection.Select(manifest);
-				LogLine($"steam: manifest {manifest.ManifestId}: {manifest.Files.Count(f => !f.IsDirectory)} files; needed set {selection.Needed.Count} files, {selection.NeededBytes} bytes; skipping {selection.Skipped.Count} files, {selection.SkippedBytes} bytes");
-				if (Intent!.GetBooleanExtra(ExtraRecordManifest, false))
-				{
-					string record = Path.Combine(FilesDir!.AbsolutePath, "steam", "manifest-record.json");
-					Directory.CreateDirectory(Path.GetDirectoryName(record)!);
-					File.WriteAllText(record, manifest.ToJson());
-					LogLine("steam: manifest recorded to files/steam/manifest-record.json (debug)");
-				}
-
-				string gameDir = GameInstaller.GameDir(this);
-				long free = new StatFs(FilesDir!.AbsolutePath).AvailableBytes;
-				long existing = Directory.Exists(gameDir) ? Directory.EnumerateFiles(gameDir, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length) : 0;
-				if (free + existing < selection.NeededBytes + (200L << 20))
-				{
-					await ShowErrorAsync($"Not enough free space: Celeste needs {FormatBytes(selection.NeededBytes)}, {FormatBytes(free)} available.").ConfigureAwait(false);
-					return;
-				}
-
-				SetScreen(Screen.Progress, "Downloading Celeste", "");
-				var installer = new DepotInstaller(gameDir, SteamTokenStore.ResumeStatePath(this), chunks, parallelism: 6, ShowProgress);
-				InstallResult result = await installer.InstallAsync(manifest, ct).ConfigureAwait(false);
-				LogLine($"steam: depot {SteamSession.LinuxDepotId} download completed and verified: files={result.Files} bytes={result.Bytes} (manifest needed set: files={selection.Needed.Count} bytes={selection.NeededBytes}); removed stale files={result.Removed.FilesDeleted}");
-
-				var gameInstaller = new GameInstaller(this, (message, fraction) => RunOnUiThread(() =>
-				{
-					status.Text = message;
-					bar.Indeterminate = fraction < 0;
-				}));
-				RunOnUiThread(() => { title.Text = "Adapting the game"; detail.Text = ""; });
-				gameInstaller.Patch();
-				gameInstaller.PrepareBackground();
-				LogLine("steam: patching completed");
-
-				SetResult(Result.Ok);
-				SetScreen(Screen.Message, "Celeste is ready", "✓  Installed from Steam. You can play offline.");
-				await Task.Delay(1200).ConfigureAwait(false);
-				RunOnUiThread(Finish);
+				SteamAuthResult auth = await SignInAsync(ct).ConfigureAwait(false);
+				SteamTokenStore.Save(this, auth.AccountName, auth.RefreshToken);
+				LogLine("steam: login successful, session stored encrypted (Android Keystore)");
+				session.Dispose();
+				session = null;
+				RunOnUiThread(StartInstall);
 			}
 			catch (OperationCanceledException)
 			{
-				LogLine("steam: cancelled (download progress is kept and resumes next time)");
-				RunOnUiThread(Finish);
+				LogLine("steam: sign-in cancelled");
 			}
 			catch (Exception e)
 			{
-				LogLine("steam: failed: " + Describe(e));
+				LogLine("steam: sign-in failed: " + Describe(e));
 				await ShowErrorAsync(Describe(e)).ConfigureAwait(false);
 			}
+		}
+
+		/// <summary>Follows the service's state: step text, file counter and bytes while working; "Done" when finished.</summary>
+		private void OnInstallStatus(InstallStatus s)
+		{
+			switch (s.Stage)
+			{
+				case InstallStage.Running or InstallStage.Waiting:
+					if (currentScreen != Screen.Progress)
+						SetScreen(Screen.Progress, s.Title, s.Step);
+					title.Text = s.Title;
+					status.Text = s.Step;
+					detail.Text = s.Detail;
+					bar.Indeterminate = s.Fraction < 0;
+					if (s.Fraction >= 0) bar.Progress = (int)(s.Fraction * 1000);
+					cancelButton.Text = "Cancel";
+					break;
+				case InstallStage.Done:
+					installDone = true;
+					if (currentScreen != Screen.Progress)
+						SetScreen(Screen.Progress, s.Title, s.Step);
+					title.Text = s.Title;
+					status.Text = s.Step;
+					detail.Text = "";
+					bar.Indeterminate = false;
+					bar.Progress = 1000;
+					cancelButton.Text = "Done"; // Cancel turns into Done; it returns to the main screen with Play focused
+					cancelButton.RequestFocus();
+					break;
+				case InstallStage.Failed:
+					_ = ShowErrorAsync(s.Step);
+					break;
+				case InstallStage.NeedsSignIn:
+					if (session == null)
+					{
+						cts.Cancel();
+						cts = new CancellationTokenSource();
+						CancellationToken token = cts.Token;
+						_ = Task.Run(() => SignInThenInstallAsync(token));
+					}
+					break;
+			}
+		}
+
+		private void RequestNotificationPermission()
+		{
+			// Android 13+: without it the service still runs, but its progress notification is hidden.
+			if (OperatingSystem.IsAndroidVersionAtLeast(33) && CheckSelfPermission("android.permission.POST_NOTIFICATIONS") != Permission.Granted)
+				RequestPermissions(new[] { "android.permission.POST_NOTIFICATIONS" }, 7);
 		}
 
 		/// <summary>Never includes details that could hold secrets: only the exception's type and message.</summary>
@@ -297,12 +305,20 @@ namespace CelesteAndroid
 			await Task.CompletedTask.ConfigureAwait(false);
 		}
 
-		private void CancelAndClose()
+		private void CancelAndClose(bool stopInstall = true)
 		{
 			if (finishing) return;
 			finishing = true;
-			cts.Cancel();
-			SetResult(Result.Canceled);
+			if (installDone)
+			{
+				SetResult(Result.Ok); // the launcher refreshes and focuses Play
+			}
+			else
+			{
+				if (stopInstall) InstallService.CancelInstall(this);
+				cts.Cancel();
+				SetResult(Result.Canceled);
+			}
 			Finish();
 		}
 
@@ -422,12 +438,12 @@ namespace CelesteAndroid
 
 			actions = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Horizontal });
 			cancelButton = Pill("Cancel", filled: false);
-			cancelButton.Click += (_, _) => CancelAndClose();
+			cancelButton.Click += (_, _) => CancelAndClose(stopInstall: true);
 			MakeFocusable(cancelButton, "Cancel");
 			actions.AddView(cancelButton, UiKit.ButtonParams(this, 150, marginTop: 14));
 			retryButton = Pill("Try again", filled: true);
 			retryButton.Visibility = ViewStates.Gone;
-			retryButton.Click += (_, _) => { cts.Cancel(); cts = new CancellationTokenSource(); session?.Dispose(); retryButton.Visibility = ViewStates.Gone; _ = Task.Run(() => PipelineAsync(cts.Token)); };
+			retryButton.Click += (_, _) => { cts.Cancel(); cts = new CancellationTokenSource(); session?.Dispose(); session = null; retryButton.Visibility = ViewStates.Gone; Begin(); };
 			MakeFocusable(retryButton, "Retry");
 			actions.AddView(retryButton, UiKit.ButtonParams(this, 170, marginTop: 14));
 			column.AddView(actions);
@@ -443,6 +459,7 @@ namespace CelesteAndroid
 
 		private void SetScreen(Screen screen, string titleText, string statusText) => RunOnUiThread(() =>
 		{
+			currentScreen = screen;
 			title.Text = titleText;
 			status.Text = statusText;
 			qrGroup.Visibility = screen == Screen.Qr ? ViewStates.Visible : ViewStates.Gone;
@@ -488,20 +505,6 @@ namespace CelesteAndroid
 			try { await session.SubmitGuardCodeAsync(code, codeIsEmail); }
 			catch (Exception e) { status.Text = Describe(e); }
 		}
-
-		private void ShowProgress(InstallProgress p)
-		{
-			RunOnUiThread(() =>
-			{
-				bar.Indeterminate = false;
-				bar.Progress = p.BytesTotal == 0 ? 0 : (int)(p.BytesDone * 1000 / p.BytesTotal);
-				status.Text = p.Phase == "Verifying" ? "Verifying files…" : "Downloading the game files…";
-				detail.Text = $"{FormatBytes(p.BytesDone)} of {FormatBytes(p.BytesTotal)}  ·  {p.FilesDone}/{p.FilesTotal} files"
-					+ (p.Phase == "Downloading" && p.BytesPerSecond > 0 ? $"  ·  {FormatBytes((long)p.BytesPerSecond)}/s" : "");
-			});
-		}
-
-		private static string FormatBytes(long bytes) => bytes >= 1L << 30 ? $"{bytes / (double)(1L << 30):0.00} GB" : $"{bytes / (double)(1L << 20):0} MB";
 
 		private void OpenInSteam(string url)
 		{

@@ -81,6 +81,34 @@ namespace CelesteAndroid
 				Interpolator = new AccelerateDecelerateInterpolator(),
 			};
 			art.StartAnimation(zoom);
+
+			// An install that was interrupted (process killed, reboot) resumes by itself; one that is running opens its screen.
+			if (InstallCoordinator.IsActive)
+				StartSteam();
+			else if (InstallCoordinator.PendingMode(this) is string pending && SteamTokenStore.HasSession(this))
+			{
+				try { InstallService.Start(this, pending == "update"); StartSteam(); }
+				catch (Exception e) { Log.Warn(LogTag, "could not resume the install now: " + e.Message); }
+			}
+		}
+
+		private Action<InstallStatus>? statusHandler;
+
+		protected override void OnStart()
+		{
+			base.OnStart();
+			statusHandler = s => RunOnUiThread(() =>
+			{
+				RefreshState();
+				if (s.Stage == InstallStage.Done) { LoadArt(); if (play.Enabled) play.RequestFocus(); }
+			});
+			InstallCoordinator.Changed += statusHandler;
+		}
+
+		protected override void OnStop()
+		{
+			InstallCoordinator.Changed -= statusHandler;
+			base.OnStop();
 		}
 
 		protected override void OnResume()
@@ -107,15 +135,13 @@ namespace CelesteAndroid
 					Play();
 				}
 			}
-			// Development (adb shell am start ... --ez steam true [--ez recordManifest true]): opens the Steam install.
+			// Development (adb shell am start ... --ez steam true [--ez forceLogin true | --ez showError true]): opens the Steam install.
 			if (!busy && Intent!.GetBooleanExtra("steam", false))
 			{
-				bool record = Intent.GetBooleanExtra(SteamActivity.ExtraRecordManifest, false);
 				bool force = Intent.GetBooleanExtra(SteamActivity.ExtraForceLogin, false);
 				bool showError = Intent.GetBooleanExtra(SteamActivity.ExtraShowError, false);
 				Intent.RemoveExtra("steam");
 				var steamIntent = new Intent(this, typeof(SteamActivity));
-				if (record) steamIntent.PutExtra(SteamActivity.ExtraRecordManifest, true);
 				if (force) steamIntent.PutExtra(SteamActivity.ExtraForceLogin, true);
 				if (showError) steamIntent.PutExtra(SteamActivity.ExtraShowError, true);
 				StartActivityForResult(steamIntent, RequestSteam);
@@ -231,7 +257,7 @@ namespace CelesteAndroid
 			panel.AddView(play, UiKit.ButtonParams(this, 260, marginTop: 14));
 
 			steamButton = PillButton("Install from Steam", filled: false);
-			steamButton.Click += (_, _) => StartSteam(record: false);
+			steamButton.Click += (_, _) => StartSteam();
 			MakeFocusable(steamButton, "InstallFromSteam");
 			panel.AddView(steamButton, UiKit.ButtonParams(this, 260, marginTop: 8));
 
@@ -342,6 +368,9 @@ namespace CelesteAndroid
 			bool installed = GameInstaller.IsInstalled(this);
 			play.Enabled = installed && !busy;
 			play.Alpha = play.Enabled ? 1f : 0.4f;
+			// "Update from Steam" is gone from here: updates live in Port settings > Check for updates.
+			bool installing = InstallCoordinator.IsActive;
+			steamButton.Visibility = installed && !installing ? ViewStates.Gone : ViewStates.Visible;
 			steamButton.Enabled = !busy;
 			importFolder.Enabled = !busy;
 			openZip.Enabled = !busy;
@@ -352,8 +381,17 @@ namespace CelesteAndroid
 			// The screen is short (~360dp): during installation the progress bar takes the links' place.
 			links.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
 			links2.Visibility = busy ? ViewStates.Gone : ViewStates.Visible;
-			steamButton.Text = installed ? "Update from Steam" : "Install from Steam";
-			if (!busy)
+			steamButton.Text = installing ? "Installing… (view progress)" : "Install from Steam";
+			if (installing)
+			{
+				InstallStatus live = InstallCoordinator.Current;
+				status.Text = live.Step;
+				progressBox.Visibility = ViewStates.Visible;
+				progressText.Text = live.Detail;
+				progressBar.Indeterminate = live.Fraction < 0;
+				if (live.Fraction >= 0) progressBar.Progress = (int)(live.Fraction * 1000);
+			}
+			else if (!busy)
 			{
 				bool paused = File.Exists(SteamTokenStore.ResumeStatePath(this));
 				status.Text = installed
@@ -375,13 +413,7 @@ namespace CelesteAndroid
 		}
 
 		/// <summary>Installs (or updates) the game from Steam; the download resumes where it stopped.</summary>
-		private void StartSteam(bool record)
-		{
-			var intent = new Intent(this, typeof(SteamActivity));
-			if (record)
-				intent.PutExtra(SteamActivity.ExtraRecordManifest, true);
-			StartActivityForResult(intent, RequestSteam);
-		}
+		private void StartSteam() => StartActivityForResult(new Intent(this, typeof(SteamActivity)), RequestSteam);
 
 		private FrameLayout rootLayout = null!;
 		private View? confirmOverlay;
@@ -469,6 +501,8 @@ namespace CelesteAndroid
 			{
 				LoadArt();
 				RefreshState();
+				if (resultCode == Result.Ok && play.Enabled)
+					play.RequestFocus(); // "Done" returns to the main screen with Play focused
 				return;
 			}
 			Uri? uri = data?.Data;

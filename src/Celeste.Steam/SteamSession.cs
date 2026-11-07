@@ -22,9 +22,22 @@ namespace CelesteAndroid.Steam
 		void OnNeedGuardCode(bool isEmailCode, string? emailHint, bool previousCodeWasIncorrect);
 	}
 
-	public sealed class SteamException : Exception
+	public class SteamException : Exception
 	{
 		public SteamException(string message, Exception? inner = null) : base(message, inner) { }
+	}
+
+	/// <summary>Steam refused to hand out the depot key: the account has no access to Celeste (not owned, no family share).</summary>
+	public sealed class SteamNoAccessException : SteamException
+	{
+		public SteamNoAccessException(string message) : base(message) { }
+	}
+
+	/// <summary>Steam answered the log-on and refused it (revoked or expired token, wrong account state...), as opposed to a network failure.</summary>
+	public sealed class SteamLogonRefusedException : SteamException
+	{
+		public EResult Result { get; }
+		public SteamLogonRefusedException(EResult result) : base($"Steam refused the sign-in: {result}.") => Result = result;
 	}
 
 	/// <summary>
@@ -239,7 +252,7 @@ namespace CelesteAndroid.Steam
 			});
 			SteamUser.LoggedOnCallback result = await WaitAsync(loggedOn.Task, TimeSpan.FromSeconds(30), ct, "logging on").ConfigureAwait(false);
 			if (result.Result != EResult.OK)
-				throw new SteamException($"Steam refused the sign-in: {result.Result}.");
+				throw new SteamLogonRefusedException(result.Result);
 			IsLoggedOn = true;
 			log("steam: logged on");
 			await WaitAsync(licenseList.Task, TimeSpan.FromSeconds(30), ct, "receiving the license list").ConfigureAwait(false);
@@ -279,6 +292,8 @@ namespace CelesteAndroid.Steam
 		{
 			// The depot key: also proves ownership (AccessDenied if the account does not have the game).
 			SteamApps.DepotKeyCallback key = await apps.GetDepotDecryptionKey(LinuxDepotId, AppId).ToTask().ConfigureAwait(false);
+			if (key.Result == EResult.AccessDenied)
+				throw new SteamNoAccessException($"Steam did not grant the depot key for {LinuxDepotId}: {key.Result}.");
 			if (key.Result != EResult.OK)
 				throw new SteamException($"Steam did not grant the depot key for {LinuxDepotId}: {key.Result} (does this account own Celeste?).");
 			depotKey = key.DepotKey;

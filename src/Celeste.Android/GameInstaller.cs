@@ -189,7 +189,7 @@ namespace CelesteAndroid
 		/// <summary>Generates the Celeste.dll that runs on Android's .NET (MonoMod, on the device itself).</summary>
 		public void Patch()
 		{
-			progress("Adapting the game for Android…", -1);
+			progress("Patching Celeste.exe", -1);
 			string patcherDir = Path.Combine(context.CacheDir!.AbsolutePath, "patcher");
 			Directory.CreateDirectory(patcherDir);
 			foreach (string asset in context.Assets!.List("patcher")!)
@@ -247,7 +247,7 @@ namespace CelesteAndroid
 			string art = Path.Combine(GameDir(context), "Content", "Graphics", "SplashScreen.png");
 			if (!File.Exists(art))
 				return;
-			progress("Generating the background…", -1);
+			progress("Generating background art", -1);
 
 			const int width = 192, height = 108;
 			using Bitmap decoded = BitmapFactory.DecodeFile(art, new BitmapFactory.Options { InSampleSize = 8 })!;
