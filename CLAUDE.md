@@ -49,6 +49,10 @@ See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
   dev tool, not a verification target: use it only when it genuinely speeds up iterating on a game patch or debugging a crash, and just make sure
   it still compiles.
 
+## Game input and Back
+- Drive the game with held presses: `adb -s $ANDROID_SERIAL shell input keyevent --duration 90 KEYCODE_C` (confirm) / `KEYCODE_X` (back); Enter does nothing (see `docs/BUILDING.md`). Read where the game is from the `[CelesteAndroid] state: ...` logcat markers (title, main menu, file select, level, pause menu, return confirmation), not from screenshots.
+- System Back (button/gesture) is not the game's Escape: it shows a "Return to launcher?" dialog (Yes = Save and Quit and back to the launcher, never re-triggering Autoplay; No = resume). Gamepad buttons (B, Start, Select, a gamepad's Back key) are game input and must never show it (`adb shell input gamepad keyevent ...` tests this).
+
 ## Launcher UI
 - Every new or changed launcher screen or dialog must be screenshot-checked on the phone with each control focused (gamepad keys), and nothing may be clipped (buttons, focus outlines, text). No fixed heights: use `UiKit` (`Pill`, `ButtonParams`, `NoClip`), wrap_content with margin for the focus outline, and a ScrollView where content may not fit.
 

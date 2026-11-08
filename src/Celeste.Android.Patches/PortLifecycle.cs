@@ -71,10 +71,14 @@ namespace CelesteAndroid
 			{
 				PauseLevel();
 			}
+			PortBack.Tick();
 			PortExit.Tick();
 		}
 
-		private static void PauseLevel()
+		/// <summary>Stops a pause that was still waiting for the level to be able to pause.</summary>
+		public static void CancelPendingPause() => pausePending = false;
+
+		public static void PauseLevel()
 		{
 			if (Engine.Scene is not Level level)
 			{

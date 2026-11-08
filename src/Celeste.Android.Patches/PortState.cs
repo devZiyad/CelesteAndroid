@@ -15,7 +15,7 @@ namespace CelesteAndroid
 		/// <summary>Every update (cheap: a few type checks); prints only on change.</summary>
 		public static void Tick()
 		{
-			string state = Describe(Engine.Scene);
+			string state = PortBack.Showing ? "return confirmation" : Describe(Engine.Scene);
 			if (state == last)
 			{
 				return;

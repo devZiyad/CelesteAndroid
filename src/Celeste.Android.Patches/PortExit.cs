@@ -14,6 +14,9 @@ namespace CelesteAndroid
 	public static class PortExit
 	{
 		private static bool exitPending;
+		private static TextMenu? lastMenu;
+		private static TextMenu.Button? lastExit;
+		private static int waitedTicks;
 
 		/// <summary>Called after the original Level.Pause built the menu: adds the item right below "Save and Quit".</summary>
 		public static void AddExitItem(Level level)
@@ -40,6 +43,8 @@ namespace CelesteAndroid
 				saveItem.OnPressed?.Invoke();
 			});
 			menu.Add(exit);
+			lastMenu = menu;
+			lastExit = exit;
 			items.RemoveAt(items.Count - 1);
 			items.Insert(items.IndexOf(saveItem) + 1, exit);
 			menu.RecalculateSize();
@@ -53,6 +58,49 @@ namespace CelesteAndroid
 		{
 			var toAdd = (IEnumerable?)typeof(EntityList).GetField("toAdd", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(level.Entities);
 			return toAdd?.OfType<TextMenu>().LastOrDefault() ?? level.Entities.FindFirst<TextMenu>();
+		}
+
+		/// <summary>The pause menu of a paused level (null if there is none).</summary>
+		public static TextMenu? PauseMenu(Level level) => level.Paused && lastMenu?.Scene == level ? lastMenu : null;
+
+		/// <summary>
+		/// Leaves for the launcher: in a level it opens the pause menu if needed and presses its "Exit to launcher" item (Save and Quit, then
+		/// close); in any other scene there is nothing to save and the game closes at once. Returns false while it has to wait (the level cannot
+		/// pause yet); call it again next update.
+		/// </summary>
+		public static bool RequestExit()
+		{
+			if (Engine.Scene is not Level level)
+			{
+				waitedTicks = 0;
+				Console.WriteLine("[CelesteAndroid] exit to launcher: closing the game (" + (Engine.Scene?.GetType().Name ?? "no scene") + ")");
+				Engine.Instance.Exit();
+				return true;
+			}
+			if (!level.Paused)
+			{
+				PortLifecycle.PauseLevel();
+			}
+			if (level.Paused)
+			{
+				waitedTicks = 0;
+				if (PauseMenu(level) != null && lastExit != null)
+				{
+					lastExit.OnPressed?.Invoke();
+					return true;
+				}
+				Console.WriteLine("[CelesteAndroid] exit to launcher: no Save and Quit in this menu, closing the game");
+				Engine.Instance.Exit();
+				return true;
+			}
+			if (++waitedTicks > 300) // 5 s and the level still cannot pause
+			{
+				waitedTicks = 0;
+				Console.WriteLine("[CelesteAndroid] exit to launcher: level cannot pause, closing the game");
+				Engine.Instance.Exit();
+				return true;
+			}
+			return false;
 		}
 
 		/// <summary>Every update: once Save and Quit brought the main menu back, close the game.</summary>

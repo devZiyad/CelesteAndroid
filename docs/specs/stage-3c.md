@@ -15,6 +15,10 @@ The phone was not available while this was written: nothing here was run on a de
   save file (`0.celeste`, `1.celeste`, `2.celeste` if present, `settings.celeste`) as plain files into a folder picked with Android's folder
   picker; import reads the plain `.celeste` files from a picked folder, validates them, backs up the current saves, then copies them in.
   Config > Game files keeps "Re-import from folder".
+- **Android Back** (change of design, after the first 3c draft): the system Back button/gesture no longer sends Escape. It pauses the game and shows
+  "Return to launcher?" (Yes / No, controller-navigable, No focused). Yes uses the same save-and-exit path as the pause-menu item *Exit to launcher* and does
+  not trigger Autoplay again (it runs once per process); No resumes the paused game. Gamepad B, Start and Select (and a gamepad's Back key) keep their normal
+  in-game behavior and never show it. Game-state markers: `[CelesteAndroid] state: title|main menu|file select|level|pause menu|return confirmation|...`.
 - **Legend**: the launcher's bottom-right legend and Config's bottom legend are both removed.
 - **Renderer note**: the actual string was "(applies on the next Play)" (Config row label); the suffix is gone. `PortSetting.NextLaunch` stays
   because it still decides which settings the in-game PORT menu hides.

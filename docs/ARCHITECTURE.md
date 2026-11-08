@@ -128,8 +128,12 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
   `[CelesteAndroid] lifecycle: ...`.
 - **Landscape only.** SDL's `setOrientationBis` overwrote the manifest's `sensorLandscape` with `FULL_USER` when the window was created (portrait allowed);
   `GameActivity` overrides it.
-- **Android Back** is Celeste's pause/back key. With predictive back (targetSdk 36) the key event never arrives, so `GameActivity` registers an
-  `OnBackInvokedCallback` that sends an Escape press to SDL.
+- **Android Back** (system button or gesture) leaves the game, it is not the game's Escape. `GameActivity` shows a "Return to launcher?" dialog (Yes / No,
+  D-pad and A work, B answers No) and sets `AppContext` data `CelesteAndroid.BackRequest` (`show` / `yes` / `no`); `PortBack` (patches) reads it each update:
+  `show` pauses the level, `no` resumes it through the pause menu's own cancel, `yes` goes through the same path as the pause-menu item *Exit to launcher*
+  (`PortExit.RequestExit`: Save and Quit, then close; outside a level there is nothing to save and the game closes at once). Gamepad buttons (B, Start,
+  Select and a gamepad's Back key) are game input: `DispatchKeyEvent` forwards them and consumes them, and the back callback ignores the key-up that follows
+  one. Logcat: `[CelesteAndroid] return dialog: shown|yes|no`, `state: return confirmation`.
 - **Autoplay.** `LauncherActivity.MaybeAutoplay` runs once per process in `OnCreate` (never in `OnResume`, never for a recreated activity): with the game
   installed and the Autoplay setting on, the app opens straight into the game. Returning from the game (the title's Exit, or *Exit to launcher*) shows the
   launcher and does not start the game again. *Exit to launcher* (`PortExit`, an additive `Level.Pause` hook) runs the game's own *Save and Quit* and closes
