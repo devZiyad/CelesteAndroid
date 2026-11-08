@@ -144,10 +144,22 @@ namespace CelesteAndroid
 		public static FrameLayout Splash(Context context, string subtitle)
 		{
 			var root = new FrameLayout(context) { Clickable = true, Focusable = false }; // swallows touches, never takes focus
-			root.Background = NightBackground();
+			root.SetBackgroundColor(Night);
+			// The launcher's key art, under a scrim that keeps the title readable.
+			var art = new ImageView(context);
+			art.SetScaleType(ImageView.ScaleType.CenterCrop);
+			LoadArt(context, art);
+			root.AddView(art, new FrameLayout.LayoutParams(-1, -1));
+			root.AddView(new View(context)
+			{
+				Background = new GradientDrawable(GradientDrawable.Orientation.TopBottom!, new int[] { Color.Argb(150, 38, 24, 70), Color.Argb(215, 18, 12, 34) }),
+			}, new FrameLayout.LayoutParams(-1, -1));
+
+			// A full-width column: the title is centered inside it and shrinks to fit instead of being cut off by a wrapped width.
 			var column = NoClip(new LinearLayout(context) { Orientation = Orientation.Vertical });
 			column.SetGravity(GravityFlags.Center);
-			root.AddView(column, new FrameLayout.LayoutParams(-2, -2, GravityFlags.Center));
+			column.SetPadding(Dp(context, 24), 0, Dp(context, 24), 0);
+			root.AddView(column, new FrameLayout.LayoutParams(-1, -2, GravityFlags.Center));
 
 			int logoId = context.Resources!.GetIdentifier("celeste_logo", "drawable", context.PackageName);
 			if (logoId != 0)
@@ -155,14 +167,18 @@ namespace CelesteAndroid
 				var logo = new ImageView(context);
 				logo.SetImageResource(logoId);
 				logo.SetAdjustViewBounds(true);
-				column.AddView(logo, new LinearLayout.LayoutParams(Dp(context, 190), Dp(context, 130)));
+				logo.SetScaleType(ImageView.ScaleType.FitCenter);
+				column.AddView(logo, new LinearLayout.LayoutParams(-1, Dp(context, 130)));
 			}
 			else
 			{
 				TextView title = Text(context, "CELESTE", 54, Color.White, TypefaceStyle.Bold);
 				title.Gravity = GravityFlags.Center;
-				title.LetterSpacing = 0.18f;
-				column.AddView(title);
+				title.LetterSpacing = 0.12f;
+				title.SetSingleLine(true);
+				title.SetShadowLayer(Dp(context, 12), 0, Dp(context, 2), Color.Argb(160, 0, 0, 0));
+				title.SetAutoSizeTextTypeUniformWithConfiguration(24, 54, 2, (int)ComplexUnitType.Sp);
+				column.AddView(title, new LinearLayout.LayoutParams(-1, -2));
 			}
 			TextView sub = Text(context, subtitle, SecondarySp, Accent);
 			sub.Gravity = GravityFlags.Center;
