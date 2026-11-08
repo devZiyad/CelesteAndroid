@@ -38,6 +38,7 @@ namespace CelesteAndroid
 
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
+			StartupTrace.Mark("runtime-ready");
 			base.OnCreate(savedInstanceState);
 			// On Android, FMOD needs the Context for audio and for reading files.
 			Org.Fmod.FMOD.Init(this);
@@ -180,6 +181,7 @@ namespace CelesteAndroid
 		// Called by SDL on the "SDLThread" thread once the surface exists; replaces the native SDL_main.
 		protected override void Main()
 		{
+			StartupTrace.Mark("sdl-main");
 			// FNA/FNA3D log to stderr, which does not reach logcat on Android.
 			FNALoggerEXT.LogInfo = msg => Log.Info(LogTag, msg);
 			FNALoggerEXT.LogWarn = msg => Log.Warn(LogTag, msg);

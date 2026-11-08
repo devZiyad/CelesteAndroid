@@ -29,7 +29,9 @@ namespace CelesteAndroid
 			AppContext.SetData("APP_CONTEXT_BASE_DIRECTORY", gameDir + Path.DirectorySeparatorChar);
 			Environment.CurrentDirectory = gameDir;
 
+			StartupTrace.Mark("assembly-load-begin");
 			Assembly celeste = AssemblyLoadContext.Default.LoadFromAssemblyPath(GameInstaller.PatchedDll(context));
+			StartupTrace.Mark("assembly-load-end");
 
 			// Engine.AssemblyDirectory comes from Assembly.Location, which does not point at the game.
 			celeste.GetType("Monocle.Engine", throwOnError: true)!
@@ -38,6 +40,7 @@ namespace CelesteAndroid
 
 			MethodInfo main = celeste.GetType("Celeste.Celeste", throwOnError: true)!
 				.GetMethod("Main", BindingFlags.NonPublic | BindingFlags.Static)!;
+			StartupTrace.Mark("celeste-main");
 			main.Invoke(null, new object[] { Array.Empty<string>() });
 		}
 	}
