@@ -392,7 +392,42 @@ namespace CelesteAndroid
 				new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), TopMargin = Dp(6), BottomMargin = Dp(4) });
 			var versionText = Text("Version " + version, 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
 			versionText.ContentDescription = "Version";
-			panel.AddView(versionText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4) });
+			panel.AddView(versionText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(10) });
+
+			panel.AddView(Text("If something goes wrong, share a plain text file with the app's recent log, Celeste's error log, the version, " +
+				"the device and the port settings. It never contains passwords, tokens or the Steam account.", 14, Color.Argb(190, 255, 255, 255), TypefaceStyle.Normal),
+				new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(6) });
+			panel.AddView(ActionRow("Share logs", "ShareLogs", ShareLogs), RowParams());
+		}
+
+		/// <summary>Builds the report off the UI thread, then opens the share sheet.</summary>
+		private void ShareLogs()
+		{
+			if (working) return;
+			working = true;
+			message.Text = "Preparing logs…";
+			new System.Threading.Thread(() =>
+			{
+				string? path = null, error = null;
+				try { path = LogShare.CreateReport(this); }
+				catch (Exception e)
+				{
+					Log.Error(LogTag, "share logs failed: " + e);
+					error = e.Message;
+				}
+				RunOnUiThread(() =>
+				{
+					working = false;
+					message.Text = "";
+					if (path != null)
+					{
+						Log.Info("CelesteAndroid", "[CelesteAndroid] config: share sheet opened for " + System.IO.Path.GetFileName(path));
+						StartActivity(LogShare.ShareIntent(this, path));
+					}
+					else
+						ShowInfo("Couldn't create the logs", error ?? "Something went wrong.", null, null);
+				});
+			}) { Name = "CelesteShareLogs", IsBackground = true }.Start();
 		}
 
 		/// <summary>A row "Label ........ ‹ value ›"; with setting == null, the "Reset to defaults" button.</summary>
