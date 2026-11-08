@@ -14,8 +14,10 @@ using Color = Android.Graphics.Color;
 namespace CelesteAndroid
 {
 	/// <summary>
-	/// Config: Port settings (renderer, frame cap, autoplay...), Saves (import/export), Game files (check for updates, re-import, delete)
-	/// and the Steam account (name, Sign out, Switch account). These are launcher-only: the in-game PORT section has only the port settings.
+	/// Config, in five tabs: Port settings (renderer, frame cap, autoplay...), Saves (import/export), Game files (check for updates,
+	/// re-import, delete), Steam account (name, Sign out, Switch account) and About (version). These are launcher-only: the in-game PORT
+	/// section has only the port settings. L1/R1 switch tabs; Left/Right on the tab bar too; Down from the tab bar enters the list and Up
+	/// from its first row returns to the tab bar. Everything wraps around.
 	/// Saves import/export and Delete game files run here and report through dialogs; closing a dialog puts focus back on the row that
 	/// opened it. Only what needs the launcher's progress UI (re-import, update check) is handed back to it as a result.
 	/// Controller: up/down pick the row, left/right (or A) change the value, B goes back.
@@ -40,17 +42,22 @@ namespace CelesteAndroid
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
 
+		private static readonly string[] TabNames = { "Port settings", "Saves", "Game files", "Steam account", "About" };
+
 		private readonly Dictionary<View, (PortSetting Setting, TextView Value)> rows = new();
-		private View? firstRow;
+		private readonly TextView[] tabs = new TextView[TabNames.Length];
+		private readonly LinearLayout[] panels = new LinearLayout[TabNames.Length];
+		private int selectedTab;
+		private ScrollView scroll = null!;
 		private TextView message = null!, accountText = null!;
-		private View signOutRow = null!, switchRow = null!, deleteRow = null!, reimportFolderRow = null!, checkUpdatesRow = null!;
+		private View signInRow = null!, signOutRow = null!, switchRow = null!, deleteRow = null!, reimportFolderRow = null!, checkUpdatesRow = null!;
 		private FrameLayout rootFrame = null!;
 		private LinearLayout column = null!;
 		private UiDialog? dialog;
 		private bool working;
 
 		protected override string Tag => LogTag;
-		protected override View? InitialFocus() => firstRow;
+		protected override View? InitialFocus() => tabs[selectedTab];
 		protected override bool InputBlocked => working;
 		protected override void OnBackButton()
 		{
@@ -177,6 +184,7 @@ namespace CelesteAndroid
 			reimportFolderRow.Visibility = idle ? ViewStates.Visible : ViewStates.Gone;
 			string? name = SteamAccount.Name(this);
 			accountText.Text = name == null ? "Not signed in to Steam" : "Signed in as " + name;
+			signInRow.Visibility = name == null ? ViewStates.Visible : ViewStates.Gone;
 			signOutRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
 			switchRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
 		}
@@ -207,12 +215,62 @@ namespace CelesteAndroid
 
 		protected override bool OnHorizontal(int direction)
 		{
+			if (CurrentFocus != null && Array.IndexOf(tabs, CurrentFocus) >= 0)
+			{
+				SelectTab(selectedTab + direction, focusTab: true);
+				return true;
+			}
 			if (CurrentFocus != null && rows.TryGetValue(CurrentFocus, out var row))
 			{
 				Cycle(row.Setting, row.Value, direction);
 				return true;
 			}
 			return false;
+		}
+
+		protected override bool OnShoulder(int direction)
+		{
+			if (dialog is { IsOpen: true }) return true;
+			SelectTab(selectedTab + direction, focusTab: Array.IndexOf(tabs, CurrentFocus) >= 0);
+			return true;
+		}
+
+		/// <summary>The Up/Down order: the selected tab, then the visible rows of its panel (wraps at both ends).</summary>
+		protected override List<View>? VerticalRing()
+		{
+			var ring = new List<View> { tabs[selectedTab] };
+			LinearLayout panel = panels[selectedTab];
+			for (int i = 0; i < panel.ChildCount; i++)
+			{
+				View child = panel.GetChildAt(i)!;
+				if (child.Focusable && child.Visibility == ViewStates.Visible && child.Enabled) ring.Add(child);
+			}
+			return ring;
+		}
+
+		/// <summary>Shows tab <paramref name="index"/> (wrapping). Focus stays on the tab bar when it was there, otherwise it goes to the new tab's first row.</summary>
+		private void SelectTab(int index, bool focusTab)
+		{
+			int n = TabNames.Length;
+			selectedTab = ((index % n) + n) % n;
+			for (int i = 0; i < n; i++)
+			{
+				bool on = i == selectedTab;
+				tabs[i].Selected = on;
+				tabs[i].SetTextColor(on ? Color.White : Color.Argb(190, 255, 255, 255));
+				tabs[i].SetTypeface(Typeface.Create("sans-serif-medium", on ? TypefaceStyle.Bold : TypefaceStyle.Normal), on ? TypefaceStyle.Bold : TypefaceStyle.Normal);
+				panels[i].Visibility = on ? ViewStates.Visible : ViewStates.Gone;
+			}
+			scroll.ScrollTo(0, 0);
+			RefreshAccount();
+			Log.Info("CelesteAndroid", "[CelesteAndroid] config tab: " + TabNames[selectedTab]);
+			if (focusTab)
+				tabs[selectedTab].RequestFocus();
+			else
+			{
+				List<View> ring = VerticalRing()!;
+				(ring.Count > 1 ? ring[1] : ring[0]).RequestFocus();
+			}
 		}
 
 		private void Cycle(PortSetting setting, TextView value, int direction)
@@ -245,45 +303,95 @@ namespace CelesteAndroid
 			title.LetterSpacing = 0.06f;
 			column.AddView(title, new LinearLayout.LayoutParams(-2, -2) { BottomMargin = Dp(6) });
 
+			// Tab bar. No fixed heights; a margin around each tab so the focus outline is never clipped.
+			var tabBar = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Horizontal });
+			tabBar.SetPadding(Dp(4), Dp(4), Dp(4), Dp(4));
+			for (int i = 0; i < TabNames.Length; i++)
+			{
+				int index = i;
+				var tab = Text(TabNames[i], 15, Color.White, TypefaceStyle.Normal);
+				tab.Gravity = GravityFlags.Center;
+				tab.SetSingleLine(true);
+				tab.SetPadding(Dp(10), Dp(9), Dp(10), Dp(9));
+				tab.SetMinimumHeight(Dp(40));
+				tab.Background = TabBackground();
+				MakeFocusable(tab, "Tab" + TabNames[i].Replace(" ", ""));
+				tab.Click += (_, _) => SelectTab(index, focusTab: true);
+				tabs[i] = tab;
+				tabBar.AddView(tab, new LinearLayout.LayoutParams(0, -2, 1f) { LeftMargin = Dp(3), RightMargin = Dp(3) });
+			}
+			column.AddView(tabBar, new LinearLayout.LayoutParams(-1, -2));
+
 			message = Text("", 14, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
-			column.AddView(message, new LinearLayout.LayoutParams(-2, -2) { BottomMargin = Dp(2) });
+			column.AddView(message, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(2), BottomMargin = Dp(2) });
 
 			// No fixed heights: rows are as tall as their text plus padding, with a margin so the focus outline is never clipped.
 			var list = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical });
 			list.SetPadding(Dp(4), Dp(4), Dp(4), Dp(4));
+			for (int i = 0; i < panels.Length; i++)
+			{
+				panels[i] = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone });
+				panels[i].SetPadding(Dp(4), Dp(2), Dp(4), Dp(2)); // room around the rows for their focus outline
+				list.AddView(panels[i], new LinearLayout.LayoutParams(-1, -2));
+			}
 
-			list.AddView(Section("Port settings"), SectionParams(first: true));
 			foreach (PortSetting setting in PortSettings.All)
-				list.AddView(Row(setting), RowParams());
-			list.AddView(Row(null), RowParams());
+				panels[0].AddView(Row(setting), RowParams());
+			panels[0].AddView(Row(null), RowParams());
 
-			list.AddView(Section("Saves"), SectionParams());
-			list.AddView(ActionRow("Import saves from a folder", "ImportSavesFolder", () => PickFolder(ReqImportSavesFolder)), RowParams());
-			list.AddView(ActionRow("Export saves to a folder", "ExportSavesFolder", () => PickFolder(ReqExportSavesFolder)), RowParams());
+			panels[1].AddView(ActionRow("Import saves from a folder", "ImportSavesFolder", () => PickFolder(ReqImportSavesFolder)), RowParams());
+			panels[1].AddView(ActionRow("Export saves to a folder", "ExportSavesFolder", () => PickFolder(ReqExportSavesFolder)), RowParams());
 
-			list.AddView(Section("Game files"), SectionParams());
 			checkUpdatesRow = ActionRow("Check for updates", "CheckForUpdates", () => Hand(ActionCheckUpdates));
-			list.AddView(checkUpdatesRow, RowParams());
+			panels[2].AddView(checkUpdatesRow, RowParams());
 			reimportFolderRow = ActionRow("Re-import from folder", "ReimportFolder", () => PickFolder(ReqReimportFolder));
-			list.AddView(reimportFolderRow, RowParams());
+			panels[2].AddView(reimportFolderRow, RowParams());
 			deleteRow = ActionRow("Delete game files", "DeleteGameFiles", ConfirmDelete);
-			list.AddView(deleteRow, RowParams());
+			panels[2].AddView(deleteRow, RowParams());
 
-			list.AddView(Section("Steam account"), SectionParams());
 			accountText = Text("", 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
-			list.AddView(accountText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4), TopMargin = Dp(2) });
+			panels[3].AddView(accountText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4), TopMargin = Dp(2) });
+			signInRow = ActionRow("Sign in to Steam", "SignIn", () => StartActivityForResult(
+				new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraForceLogin, true), ReqSignIn));
+			panels[3].AddView(signInRow, RowParams());
 			signOutRow = ActionRow("Sign out", "SignOut", () => SignOut(thenSignInAgain: false));
-			list.AddView(signOutRow, RowParams());
+			panels[3].AddView(signOutRow, RowParams());
 			switchRow = ActionRow("Switch account", "SwitchAccount", () => SignOut(thenSignInAgain: true));
-			list.AddView(switchRow, RowParams());
+			panels[3].AddView(switchRow, RowParams());
 
-			var scroll = new ScrollView(this) { VerticalScrollBarEnabled = false };
+			AddAbout(panels[4]);
+
+			scroll = new ScrollView(this) { VerticalScrollBarEnabled = false };
 			scroll.SetClipChildren(false);
 			scroll.SetClipToPadding(false);
 			scroll.AddView(list);
 			column.AddView(scroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
+			SelectTabInitial();
 			return root;
+		}
+
+		private void SelectTabInitial()
+		{
+			for (int i = 0; i < tabs.Length; i++)
+			{
+				bool on = i == selectedTab;
+				tabs[i].Selected = on;
+				tabs[i].SetTextColor(on ? Color.White : Color.Argb(190, 255, 255, 255));
+				tabs[i].SetTypeface(Typeface.Create("sans-serif-medium", on ? TypefaceStyle.Bold : TypefaceStyle.Normal), on ? TypefaceStyle.Bold : TypefaceStyle.Normal);
+				panels[i].Visibility = on ? ViewStates.Visible : ViewStates.Gone;
+			}
+		}
+
+		/// <summary>About: the app's name and version.</summary>
+		private void AddAbout(LinearLayout panel)
+		{
+			string version = PackageManager!.GetPackageInfo(PackageName!, 0)?.VersionName ?? "?";
+			panel.AddView(Text("Celeste — native Android port", 17, Color.White, TypefaceStyle.Bold),
+				new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), TopMargin = Dp(6), BottomMargin = Dp(4) });
+			var versionText = Text("Version " + version, 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			versionText.ContentDescription = "Version";
+			panel.AddView(versionText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4) });
 		}
 
 		/// <summary>A row "Label ........ ‹ value ›"; with setting == null, the "Reset to defaults" button.</summary>
@@ -317,7 +425,6 @@ namespace CelesteAndroid
 					Log.Info(LogTag, "changed: reset to defaults");
 				};
 			}
-			firstRow ??= row;
 			return row;
 		}
 
@@ -346,6 +453,24 @@ namespace CelesteAndroid
 			row.AddView(Text(label, 17, Accent, TypefaceStyle.Normal), new LinearLayout.LayoutParams(0, -2, 1f));
 			row.Click += (_, _) => action();
 			return row;
+		}
+
+		/// <summary>A tab: soft fill when selected, the focus outline when focused.</summary>
+		private Drawable TabBackground()
+		{
+			GradientDrawable Shape(Color fill, Color? stroke)
+			{
+				var shape = new GradientDrawable();
+				shape.SetCornerRadius(Dp(20));
+				shape.SetColor(fill);
+				if (stroke is Color c) shape.SetStroke(Dp(2.5f), c);
+				return shape;
+			}
+			var states = new StateListDrawable();
+			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, Shape(Color.Argb(110, 242, 184, 216), Accent));
+			states.AddState(new[] { Android.Resource.Attribute.StateSelected }, Shape(Color.Argb(60, 242, 184, 216), null));
+			states.AddState(new int[0], new ColorDrawable(Color.Transparent));
+			return states;
 		}
 
 		private Drawable FocusBackground()
