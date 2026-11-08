@@ -74,7 +74,7 @@ def walk(node, parent_bounds, parent_scrolls):
             rows.append((("FOCUS " if focused else "      ") + " ".join(flags), name, b))
         if flags:
             problems += 1
-    scrolls = node.get("scrollable") == "true"
+    scrolls = parent_scrolls or node.get("scrollable") == "true"  # rows inside a scroll list are cut by the viewport, not clipped
     for child in node:
         walk(child, b if b else parent_bounds, scrolls)
 
