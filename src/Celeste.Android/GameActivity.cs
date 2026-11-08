@@ -82,20 +82,31 @@ namespace CelesteAndroid
 
 		private const string BackKey = "CelesteAndroid.BackRequest"; // read by the game's PortBack (Celeste.Android.Patches)
 		private AlertDialog? returnDialog;
+		private string? returnAnswer; // set by a button; any other way of closing the dialog counts as "no"
 
-		/// <summary>"Return to launcher?" Yes / No. The game pauses behind it; Yes leaves through the pause menu's "Exit to launcher" path.</summary>
+		/// <summary>
+		/// "Return to launcher?" Yes / No. The game pauses behind it; Yes leaves through the pause menu's "Exit to launcher" path.
+		/// System Back while it is open closes it as No. Every way of closing it goes through the dismiss listener, which resets the state, so
+		/// the next Back always opens it again.
+		/// </summary>
 		private void AskReturnToLauncher()
 		{
-			if (returnDialog != null) return;
+			if (returnDialog != null)
+			{
+				if (returnDialog.IsShowing) returnDialog.Dismiss(); // Back again: counts as No
+				else returnDialog = null; // stale, never leave the state stuck
+				return;
+			}
 			AppContext.SetData(BackKey, "show");
+			returnAnswer = null;
 			var dialog = new AlertDialog.Builder(this, Android.Resource.Style.ThemeDeviceDefaultDialogAlert)!
 				.SetTitle("Return to launcher?")!
 				.SetMessage("Your progress is saved first.")!
-				.SetPositiveButton("Yes", (_, _) => Answer("yes"))!
-				.SetNegativeButton("No", (_, _) => Answer("no"))!
-				.SetOnCancelListener(new CancelListener(() => Answer("no")))!
+				.SetPositiveButton("Yes", (_, _) => returnAnswer = "yes")!
+				.SetNegativeButton("No", (_, _) => returnAnswer = "no")!
 				.Create()!;
 			returnDialog = dialog;
+			dialog.SetOnDismissListener(new DismissListener(OnReturnDialogDismissed)); // fires for buttons, Back, cancel, Dismiss() and window loss
 			// Gamepad: B answers No (the buttons take D-pad focus and A natively).
 			dialog.SetOnKeyListener(new KeyListener(() => dialog.Dismiss(), Keycode.ButtonB));
 			dialog.Show();
@@ -106,17 +117,29 @@ namespace CelesteAndroid
 			Log.Info("CelesteAndroid", "[CelesteAndroid] return dialog: shown");
 		}
 
-		private void Answer(string answer)
+		private void OnReturnDialogDismissed()
 		{
-			if (returnDialog == null) return;
+			string answer = returnAnswer ?? "no";
+			returnAnswer = null;
 			returnDialog = null;
 			AppContext.SetData(BackKey, answer);
 			Log.Info("CelesteAndroid", "[CelesteAndroid] return dialog: " + answer);
 		}
 
-		private sealed class CancelListener(Action action) : Java.Lang.Object, IDialogInterfaceOnCancelListener
+		/// <summary>Losing the window (home, another app, the screen turning off): close the dialog; the game stays paused as the lifecycle left it.</summary>
+		protected override void OnPause()
 		{
-			public void OnCancel(IDialogInterface? dialog) => action();
+			if (returnDialog != null)
+			{
+				returnAnswer = "reset";
+				returnDialog.Dismiss();
+			}
+			base.OnPause();
+		}
+
+		private sealed class DismissListener(Action action) : Java.Lang.Object, IDialogInterfaceOnDismissListener
+		{
+			public void OnDismiss(IDialogInterface? dialog) => action();
 		}
 
 		private sealed class KeyListener(Action action, Keycode code) : Java.Lang.Object, IDialogInterfaceOnKeyListener

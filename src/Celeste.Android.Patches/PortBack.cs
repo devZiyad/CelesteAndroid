@@ -52,6 +52,10 @@ namespace CelesteAndroid
 					pausedByUs = false;
 					exitWanted = true;
 					break;
+				case "reset": // the dialog went away without an answer (the app lost focus): forget it, the game stays paused as it is
+					Showing = false;
+					pausedByUs = false;
+					break;
 				case "no":
 					Showing = false;
 					if (pausedByUs)

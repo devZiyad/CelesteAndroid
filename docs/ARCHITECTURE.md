@@ -133,7 +133,7 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
   `show` pauses the level, `no` resumes it through the pause menu's own cancel, `yes` goes through the same path as the pause-menu item *Exit to launcher*
   (`PortExit.RequestExit`: Save and Quit, then close; outside a level there is nothing to save and the game closes at once). Gamepad buttons (B, Start,
   Select and a gamepad's Back key) are game input: `DispatchKeyEvent` forwards them and consumes them, and the back callback ignores the key-up that follows
-  one. Logcat: `[CelesteAndroid] return dialog: shown|yes|no`, `state: return confirmation`.
+  one. Back while the dialog is open closes it as No; every way of closing it (buttons, Back, B, `Dismiss`) goes through the dialog's dismiss listener, which resets its state, so it always opens again; losing the window sends `reset` (the game stays paused as it is). Logcat: `[CelesteAndroid] return dialog: shown|yes|no|reset`, `state: return confirmation`.
 - **Autoplay.** `LauncherActivity.MaybeAutoplay` runs once per process in `OnCreate` (never in `OnResume`, never for a recreated activity): with the game
   installed and the Autoplay setting on, the app opens straight into the game. Returning from the game (the title's Exit, or *Exit to launcher*) shows the
   launcher and does not start the game again. *Exit to launcher* (`PortExit`, an additive `Level.Pause` hook) runs the game's own *Save and Quit* and closes
