@@ -51,3 +51,13 @@ The phone was not available while this was written: nothing here was run on a de
 - `[CelesteAndroid] launcher: signed in to Steam, starting the download|update check` / `launcher: not signed in to Steam, opening the sign-in`
 - `[CelesteAndroid] launcher job done: <text>` (imports; replaces the old inline success text)
 - existing: `CelesteInstall: progress: ...` every 5 s, `CelesteLauncher`/`CelesteConfig` focus lines
+
+## Found and fixed during the on-device run
+- **Patch step failed on the phone** (install looped on "Connection lost"): `PortBack.Showing` was an auto-property; MonoMod's `PatchField` resolves the
+  backing field's `[DebuggerBrowsable(<enum>)]` from `System.Runtime`, which is not a file on the device. Plain field now; rule in `CLAUDE.md`.
+- **Install service**: only network errors retry for long; other errors retry 3 times with "Something went wrong"; a timeout is no longer mistaken for the
+  user's cancel; the stack trace is logged.
+- **Saves import from a folder** found nothing in a folder without a `Saves/` subfolder (`Doc` is a struct: `FirstOrDefault` gave a default value, not null).
+- **Steam sign-in with username/password** failed on the first attempt when Steam dropped the connection during the approval wait; it now reconnects and
+  signs in again (up to 3 attempts), as the QR path already did. Not reproduced on demand after the fix.
+- **`scripts/check-ui.sh`**: accepts this device's misspelled "UI hierchary dumped" message; rows cut by a scroll viewport are no longer flagged TIGHT.
