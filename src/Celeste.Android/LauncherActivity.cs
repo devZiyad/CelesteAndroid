@@ -565,7 +565,7 @@ namespace CelesteAndroid
 				RunInstall(installer => installer.ImportFolder(uri));
 		}
 
-		/// <summary>Config hands back what needs the main screen's progress (re-import, update check).</summary>
+		/// <summary>Config hands back what needs the main screen's progress (re-import).</summary>
 		private void HandleConfigResult(Result resultCode, Intent? data)
 		{
 			LoadArt(); // the game files may have been deleted in Config
@@ -577,9 +577,6 @@ namespace CelesteAndroid
 			{
 				case ConfigActivity.ActionReimportFolder when uri != null:
 					RunInstall(installer => installer.ImportFolder(uri));
-					break;
-				case ConfigActivity.ActionCheckUpdates:
-					BeginSteam(update: true);
 					break;
 			}
 		}

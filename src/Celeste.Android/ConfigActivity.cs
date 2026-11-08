@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Threading = System.Threading;
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
@@ -19,7 +20,7 @@ namespace CelesteAndroid
 	/// section has only the port settings. L1/R1 switch tabs; Left/Right on the tab bar too; Down from the tab bar enters the list and Up
 	/// from its first row returns to the tab bar. Everything wraps around.
 	/// Saves import/export and Delete game files run here and report through dialogs; closing a dialog puts focus back on the row that
-	/// opened it. Only what needs the launcher's progress UI (re-import, update check) is handed back to it as a result.
+	/// opened it. Only what needs the launcher's progress UI (re-import) is handed back to it as a result.
 	/// Controller: up/down pick the row, left/right (or A) change the value, B goes back.
 	/// </summary>
 	[Activity(
@@ -35,7 +36,7 @@ namespace CelesteAndroid
 
 		/// <summary>Result extras: what the launcher should do (<see cref="ExtraAction"/>) and with which picked file or folder (the intent data).</summary>
 		public const string ExtraAction = "action";
-		public const string ActionReimportFolder = "reimport_folder", ActionCheckUpdates = "check_updates";
+		public const string ActionReimportFolder = "reimport_folder";
 
 		private const int ReqSignIn = 20;
 		private const int ReqImportSavesFolder = 11, ReqExportSavesFolder = 13, ReqReimportFolder = 15;
@@ -54,6 +55,12 @@ namespace CelesteAndroid
 		private LinearLayout column = null!;
 		private UiDialog? dialog;
 		private bool working;
+		private TextView checkUpdatesLabel = null!, updateStep = null!, updateStats = null!;
+		private ProgressBar updateBar = null!;
+		private LinearLayout updateBox = null!;
+		private bool updateRunning; // an update started from this screen: its end gets a dialog
+		private Action<InstallStatus>? statusHandler;
+		private TextView? buildText;
 
 		protected override string Tag => LogTag;
 		protected override View? InitialFocus() => tabs[selectedTab];
@@ -80,6 +87,20 @@ namespace CelesteAndroid
 			HideSystemBars();
 			RefreshAccount();
 			EnsureFocus();
+		}
+
+		protected override void OnStart()
+		{
+			base.OnStart();
+			statusHandler = s => RunOnUiThread(() => OnInstallStatus(s));
+			InstallCoordinator.Changed += statusHandler;
+			ShowUpdateProgress(InstallCoordinator.Current);
+		}
+
+		protected override void OnStop()
+		{
+			InstallCoordinator.Changed -= statusHandler;
+			base.OnStop();
 		}
 
 		protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)
@@ -186,7 +207,135 @@ namespace CelesteAndroid
 			signInRow.Visibility = name == null ? ViewStates.Visible : ViewStates.Gone;
 			signOutRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
 			switchRow.Visibility = name == null ? ViewStates.Gone : ViewStates.Visible;
+			ulong? build = installed ? InstallCoordinator.InstalledBuild(this) : null; // folder imports have none
+			if (buildText != null)
+			{
+				buildText.Text = build == null ? "" : $"Game build: {build} (Steam)";
+				buildText.Visibility = build == null ? ViewStates.Gone : ViewStates.Visible;
+			}
 		}
+
+		#region Check for updates (inside Game files)
+
+		private void BuildUpdateBox()
+		{
+			updateBox = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Vertical, Visibility = ViewStates.Gone });
+			updateBox.SetPadding(Dp(16), Dp(6), Dp(16), Dp(6));
+			updateStep = Text("", UiKit.SecondarySp, Color.White, TypefaceStyle.Normal);
+			updateStep.SetSingleLine(true);
+			updateStep.Ellipsize = Android.Text.TextUtils.TruncateAt.Middle;
+			updateBar = new ProgressBar(this, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Max = 1000 };
+			updateBar.ProgressTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
+			updateBar.IndeterminateTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
+			updateStats = Text("", UiKit.CaptionSp, Color.Argb(210, 255, 255, 255), TypefaceStyle.Normal);
+			updateStats.SetSingleLine(true);
+			updateBox.AddView(updateStep, new LinearLayout.LayoutParams(-1, -2));
+			updateBox.AddView(updateBar, new LinearLayout.LayoutParams(-1, Dp(8)) { TopMargin = Dp(6), BottomMargin = Dp(4) });
+			updateBox.AddView(updateStats, new LinearLayout.LayoutParams(-1, -2));
+		}
+
+		private const string CheckLabel = "Check for updates";
+
+		private void CheckForUpdates()
+		{
+			if (working || InstallCoordinator.IsActive) return;
+			if (!GameInstaller.IsInstalled(this)) { ShowInfo("Nothing to update", "The game isn't installed. Set it up from the main screen first.", checkUpdatesRow, null); return; }
+			working = true;
+			checkUpdatesLabel.Text = "Checking…";
+			Log.Info("CelesteAndroid", "[CelesteAndroid] config: checking for updates");
+			Threading.Tasks.Task.Run(async () =>
+			{
+				UpdateCheckResult? result = null;
+				string? error = null;
+				try
+				{
+					using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
+					result = await UpdateChecker.CheckAsync(this, cts.Token).ConfigureAwait(false);
+				}
+				catch (SignInRequiredException e) { error = e.Message; }
+				catch (System.OperationCanceledException) { error = "Steam didn't answer in time. Check your connection and try again."; }
+				catch (Exception e)
+				{
+					Log.Error(LogTag, "update check failed: " + e);
+					error = "Couldn't reach Steam: " + e.Message;
+				}
+				RunOnUiThread(() =>
+				{
+					working = false;
+					checkUpdatesLabel.Text = CheckLabel;
+					if (result == null) { ShowInfo("Couldn't check for updates", error ?? "Something went wrong.", checkUpdatesRow, null); return; }
+					ShowUpdateResult(result);
+				});
+			});
+		}
+
+		private void ShowUpdateResult(UpdateCheckResult r)
+		{
+			if (!r.UpdateAvailable)
+			{
+				ShowInfo($"Up to date (build {r.Current.BuildId})", "", checkUpdatesRow, null);
+				return;
+			}
+			string size = r.Current.DownloadBytes > 0 ? ", " + InstallCoordinator.FormatBytes(r.Current.DownloadBytes) : "";
+			string title = $"Update available (build {r.Current.BuildId}{size})";
+			string body = r.InstalledBuild is ulong have ? $"You have build {have}." : "Your installed version wasn't tracked yet; the update checks every file.";
+			Log.Info("CelesteAndroid", "[CelesteAndroid] config dialog: " + title);
+			dialog = UiDialog.Show(this, rootFrame, column, title, body,
+				new[]
+				{
+					new UiDialog.Button("Update", Filled: true, StartUpdate, Name: "UpdateNow"),
+					new UiDialog.Button("Later", Filled: false, Name: "UpdateLater"),
+				}, 0, checkUpdatesRow, null);
+		}
+
+		private void StartUpdate()
+		{
+			updateRunning = true;
+			Log.Info("CelesteAndroid", "[CelesteAndroid] config: update started (progress stays in Game files)");
+			InstallService.Start(this, update: true);
+			ShowUpdateProgress(InstallCoordinator.Current with { Stage = InstallStage.Running, Step = "Starting" });
+		}
+
+		private void OnInstallStatus(InstallStatus s)
+		{
+			ShowUpdateProgress(s);
+			if (!updateRunning || s.IsActive) return;
+			switch (s.Stage)
+			{
+				case InstallStage.Done:
+					updateRunning = false;
+					RefreshAccount();
+					ulong? build = InstallCoordinator.InstalledBuild(this);
+					ShowInfo(s.Title == InstallCoordinator.UpToDateTitle ? $"Up to date (build {build})" : $"Updated to build {build}", "", checkUpdatesRow, null);
+					break;
+				case InstallStage.Failed:
+					updateRunning = false;
+					ShowInfo("Couldn't update", s.Step, checkUpdatesRow, null);
+					break;
+				case InstallStage.NeedsSignIn:
+					updateRunning = false;
+					ShowInfo("Sign in to Steam", s.Step + " (Config > Steam account)", checkUpdatesRow, null);
+					break;
+				case InstallStage.Idle:
+					updateRunning = false;
+					break;
+			}
+		}
+
+		/// <summary>The progress block at the top of the Game files tab while an install or update runs.</summary>
+		private void ShowUpdateProgress(InstallStatus s)
+		{
+			bool active = s.IsActive;
+			updateBox.Visibility = active ? ViewStates.Visible : ViewStates.Gone;
+			checkUpdatesLabel.Text = active ? "Updating…" : (working ? "Checking…" : CheckLabel);
+			if (!active) return;
+			updateStep.Text = s.Step;
+			updateBar.Indeterminate = s.Fraction < 0;
+			if (s.Fraction >= 0) updateBar.Progress = (int)(s.Fraction * 1000);
+			updateStats.Text = s.Stats is { } stats ? CelesteAndroid.Steam.InstallText.FormatStats(stats) : "";
+		}
+
+		#endregion
 
 		private async void SignOut(bool thenSignInAgain)
 		{
@@ -336,7 +485,10 @@ namespace CelesteAndroid
 			panels[1].AddView(ActionRow("Import saves from a folder", "ImportSavesFolder", () => PickFolder(ReqImportSavesFolder)), RowParams());
 			panels[1].AddView(ActionRow("Export saves to a folder", "ExportSavesFolder", () => PickFolder(ReqExportSavesFolder)), RowParams());
 
-			checkUpdatesRow = ActionRow("Check for updates", "CheckForUpdates", () => Hand(ActionCheckUpdates));
+			BuildUpdateBox();
+			panels[2].AddView(updateBox, RowParams());
+			checkUpdatesRow = ActionRow("Check for updates", "CheckForUpdates", CheckForUpdates);
+			checkUpdatesLabel = (TextView)((LinearLayout)checkUpdatesRow).GetChildAt(0)!;
 			panels[2].AddView(checkUpdatesRow, RowParams());
 			reimportFolderRow = ActionRow("Re-import from folder", "ReimportFolder", () => PickFolder(ReqReimportFolder));
 			panels[2].AddView(reimportFolderRow, RowParams());
@@ -386,7 +538,10 @@ namespace CelesteAndroid
 				new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), TopMargin = Dp(6), BottomMargin = Dp(4) });
 			var versionText = Text("Version " + version, UiKit.SecondarySp, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
 			versionText.ContentDescription = "Version";
-			panel.AddView(versionText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(10) });
+			panel.AddView(versionText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4) });
+			buildText = Text("", UiKit.SecondarySp, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			buildText.ContentDescription = "Game build";
+			panel.AddView(buildText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(10) });
 
 			panel.AddView(Text("If something goes wrong, share a plain text file with the app's recent log, Celeste's error log, the version, " +
 				"the device and the port settings. It never contains passwords, tokens or the Steam account.", UiKit.CaptionSp, Color.Argb(190, 255, 255, 255), TypefaceStyle.Normal),
