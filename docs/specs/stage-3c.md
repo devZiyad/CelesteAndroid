@@ -3,15 +3,15 @@
 Goal (verbatim summary): (1) no navigation legend; (2) no "applies on next boot" note on Renderer; (3) Delete game files: nothing above
 Play, a "Game files deleted — X MB freed" dialog with one OK; (4) not installed: one large focused "Set up" button → chooser "Steam" /
 "Import from folder" (Steam: signed in → show the account and start at once; signed out → sign-in, then ownership check and download with
-no extra taps); (5) no .zip import anywhere; (6) dialogs opened from Config return to the same Config section, focus on the opener;
+no extra taps); (5) no game .zip import (saves can still be imported from and exported to a .zip); (6) dialogs opened from Config return to the same Config section, focus on the opener;
 (7) install progress on the main screen (button "Installing…" → Cancel confirmation; status line under the subtitle; bar and stats line
 at the bottom; nothing wraps, truncates at the end or changes height; on completion Play is focused and the extras disappear).
 
 The phone was not available while this was written: nothing here was run on a device. `stage-3c-test.md` has the on-device steps.
 
 ## Decisions and assumptions
-- **.zip import**: both the game import and the saves import from .zip are removed (UI and code: `ImportZip`, `ImportSavesFromZip`, the
-  picker, the debug `import_zip` extra). Saves *export* to a .zip is kept (it is not an import). Config > Game files keeps "Re-import from folder".
+- **.zip import**: only the *game* import from a .zip is removed (`ImportZip`, the launcher picker, Config's "Re-import from a .zip").
+  Saves keep import and export for both a folder and a .zip (`ImportSavesFromZip` restored). Config > Game files keeps "Re-import from folder".
 - **Legend**: the launcher's bottom-right legend and Config's bottom legend are both removed.
 - **Renderer note**: the actual string was "(applies on the next Play)" (Config row label); the suffix is gone. `PortSetting.NextLaunch` stays
   because it still decides which settings the in-game PORT menu hides.
