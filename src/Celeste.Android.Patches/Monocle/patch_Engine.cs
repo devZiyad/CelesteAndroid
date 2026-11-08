@@ -35,6 +35,7 @@ namespace Monocle
 		{
 			orig_Update(gameTime);
 			PortLifecycle.Tick();
+			PortState.Tick();
 			// Celeste's logic runs at a fixed 60 Hz (the physics depends on it), so the cap is 30 or 60:
 			// 30 = one frame every two updates; 60 = every update.
 			if (PortConfig.FrameCap < 60 && (updateCount++ % (60 / PortConfig.FrameCap)) != 0)
