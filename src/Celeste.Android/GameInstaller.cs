@@ -128,8 +128,10 @@ namespace CelesteAndroid
 			progress("Looking for save files…", -1);
 			string rootId = DocumentsContract.GetTreeDocumentId(treeUri)!;
 			List<Doc> files = ListChildren(treeUri, rootId);
+			Log.Info("CelesteInstall", $"[CelesteAndroid] saves import: folder {rootId} has {files.Count} entries: {string.Join(", ", files.Select(d => d.Name + (d.IsDir ? "/" : "")))}");
 			Doc? savesDir = files.FirstOrDefault(d => d.IsDir && d.Name.Equals("Saves", StringComparison.OrdinalIgnoreCase));
-			if (savesDir is Doc dir)
+			// Doc is a struct: FirstOrDefault gives a default Doc (Id == null), not null, when there is no Saves/ folder.
+			if (savesDir is Doc dir && dir.Id != null)
 				files = ListChildren(treeUri, dir.Id);
 			var found = new List<(string Name, byte[] Data)>();
 			foreach (Doc save in files.Where(d => !d.IsDir && IsSaveFileName(d.Name)))
