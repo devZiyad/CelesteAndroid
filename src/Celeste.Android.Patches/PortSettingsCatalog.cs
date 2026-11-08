@@ -64,11 +64,11 @@ namespace CelesteAndroid
 			new[] { "On", "Off" }, new[] { "true", "false" }, 0);
 
 		/// <summary>
-		/// Where the game's rumble goes. Auto: the controller when it supports rumble, otherwise the phone's vibration. The game's own
-		/// Rumble setting (Off / Half) still applies before this.
+		/// Where the game's rumble goes: the phone's vibrator (default), the controller (through FNA/SDL), both, or nowhere. There is no
+		/// automatic choice: controllers report a vibration motor they do not have. The game's own Rumble setting (Off / Half) still applies first.
 		/// </summary>
 		public static readonly PortSetting Rumble = new("Rumble", "Rumble",
-			new[] { "Auto", "Controller", "Phone", "Off" }, new[] { "auto", "controller", "phone", "off" }, 0);
+			new[] { "Phone", "Controller", "Both", "Off" }, new[] { "phone", "controller", "both", "off" }, 0);
 
 		public static readonly PortSetting[] All =
 		{

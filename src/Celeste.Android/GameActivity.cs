@@ -44,6 +44,7 @@ namespace CelesteAndroid
 			// On Android, FMOD needs the Context for audio and for reading files.
 			Org.Fmod.FMOD.Init(this);
 			PublishVibrator();
+			ControllerRumble.Watch(this);
 			ShowLoadingScreen();
 			// System Back (button or gesture) asks to return to the launcher; with predictive back (targetSdk 36) a gesture comes as a callback
 			// instead of a key event.

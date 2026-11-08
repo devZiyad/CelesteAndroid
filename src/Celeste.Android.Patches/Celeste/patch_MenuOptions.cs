@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using CelesteAndroid;
 using FMOD.Studio;
+using Monocle;
 
 namespace Celeste
 {
@@ -65,6 +66,11 @@ namespace Celeste
 			foreach (PortSetting setting in shown)
 			{
 				menu.Add(CreateItem(setting));
+				if (setting == PortSettingsCatalog.Rumble)
+				{
+					// Vibrates the selected target for half a second, through the same path as the game's own rumble.
+					menu.Add(new TextMenu.Button("Test rumble").Pressed(() => MInput.GamePads[0].Rumble(1f, 0.5f)));
+				}
 			}
 			// Marker for scripted checks (the in-game PORT section must hold only settings that apply live).
 			Console.WriteLine("[CelesteAndroid] menu PORT: " + string.Join(", ", shown.Select(s => s.Key)));

@@ -422,6 +422,32 @@ namespace CelesteAndroid
 			}
 		}
 
+		/// <summary>Vibrates the selected Rumble target for half a second (phone's vibrator and / or the gamepads' vibrators as Android reports them).</summary>
+		private void TestRumble()
+		{
+			string target = PortSettings.GetValue(this, PortSettingsCatalog.Rumble);
+			Log.Info("CelesteAndroid", "[CelesteAndroid] config: test rumble, target=" + target);
+			string note = "";
+			if (target is "phone" or "both")
+			{
+				Vibrator? v = OperatingSystem.IsAndroidVersionAtLeast(31)
+					? (GetSystemService(VibratorManagerService) as VibratorManager)?.DefaultVibrator
+					: GetSystemService(VibratorService) as Vibrator;
+				if (v is { HasVibrator: true })
+				{
+					v.Vibrate(VibrationEffect.CreateOneShot(500, 255)!);
+					Log.Info("CelesteAndroid", "[CelesteAndroid] rumble: test: phone vibration 500ms amplitude 255");
+				}
+				else note = "This phone has no vibrator. ";
+			}
+			if (target is "controller" or "both")
+			{
+				ControllerRumble.Describe("test");
+				if (ControllerRumble.Vibrate(500, 255) == 0) note += "Android reports no vibrator on the connected controller(s).";
+			}
+			message.Text = target == "off" ? "Rumble is Off: nothing to test." : note.Trim();
+		}
+
 		private void Cycle(PortSetting setting, TextView value, int direction)
 		{
 			PortSettings.SetIndex(this, setting, PortSettings.GetIndex(this, setting) + direction);
@@ -478,7 +504,11 @@ namespace CelesteAndroid
 			}
 
 			foreach (PortSetting setting in PortSettings.All)
+			{
 				panels[0].AddView(Row(setting), RowParams());
+				if (setting == PortSettingsCatalog.Rumble)
+					panels[0].AddView(ActionRow("Test rumble", "TestRumble", TestRumble), RowParams());
+			}
 			panels[0].AddView(Row(null), RowParams());
 
 			panels[1].AddView(ActionRow("Import saves from a folder", "ImportSavesFolder", () => PickFolder(ReqImportSavesFolder)), RowParams());

@@ -23,31 +23,31 @@ namespace CelesteAndroid
 		public static bool Route(PlayerIndex player, float strength, float seconds)
 		{
 			string mode = PortConfig.Get(PortSettingsCatalog.Rumble);
-			bool controllerRumbles = ControllerCanRumble(player);
-			bool toController, toPhone;
-			switch (mode)
-			{
-				case "off": toController = false; toPhone = false; break;
-				case "controller": toController = true; toPhone = false; break;
-				case "phone": toController = false; toPhone = true; break;
-				default: toController = controllerRumbles; toPhone = !controllerRumbles; break; // auto
-			}
-			Console.WriteLine($"[CelesteAndroid] rumble: mode={mode} strength={strength:0.00} time={seconds:0.00}s controllerRumble={controllerRumbles} -> " +
-				(toController ? "controller" : toPhone ? "phone vibrator" : "nothing"));
+			bool toController = mode is "controller" or "both";
+			bool toPhone = mode is "phone" or "both";
+			Console.WriteLine($"[CelesteAndroid] rumble: mode={mode} strength={strength:0.00} time={seconds:0.00}s -> " +
+				(toController && toPhone ? "controller + phone vibrator" : toController ? "controller" : toPhone ? "phone vibrator" : "nothing"));
+			if (toController) LogControllerCall(player, strength);
 			if (toPhone) Phone(strength, seconds);
 			return toController;
 		}
 
-		private static bool ControllerCanRumble(PlayerIndex player)
+		/// <summary>
+		/// Diagnostics for the controller route: what FNA reports for the pad, and whether SDL accepted a rumble (FNA's SetVibration returns
+		/// SDL_RumbleGamepad's result). The call is the same one the game makes right after, so it changes nothing.
+		/// </summary>
+		private static void LogControllerCall(PlayerIndex player, float strength)
 		{
 			try
 			{
 				GamePadCapabilities caps = GamePad.GetCapabilities(player);
-				return caps.IsConnected && (caps.HasLeftVibrationMotor || caps.HasRightVibrationMotor);
+				bool ok = GamePad.SetVibration(player, strength, strength);
+				Console.WriteLine($"[CelesteAndroid] rumble: controller {player} connected={caps.IsConnected} type={caps.GamePadType} id={GamePad.GetGUIDEXT(player)} " +
+					$"fnaMotors(left={caps.HasLeftVibrationMotor},right={caps.HasRightVibrationMotor}) SDL_RumbleGamepad({strength:0.00}) returned {ok}");
 			}
-			catch (Exception)
+			catch (Exception e)
 			{
-				return false;
+				Console.WriteLine("[CelesteAndroid] rumble: controller call failed: " + e.Message);
 			}
 		}
 
