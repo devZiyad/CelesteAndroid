@@ -3,15 +3,18 @@
 Goal (verbatim summary): (1) no navigation legend; (2) no "applies on next boot" note on Renderer; (3) Delete game files: nothing above
 Play, a "Game files deleted — X MB freed" dialog with one OK; (4) not installed: one large focused "Set up" button → chooser "Steam" /
 "Import from folder" (Steam: signed in → show the account and start at once; signed out → sign-in, then ownership check and download with
-no extra taps); (5) no game .zip import (saves can still be imported from and exported to a .zip); (6) dialogs opened from Config return to the same Config section, focus on the opener;
+no extra taps); (5) no .zip anywhere (game or saves; saves import/export use plain files in a folder); (6) dialogs opened from Config return to the same Config section, focus on the opener;
 (7) install progress on the main screen (button "Installing…" → Cancel confirmation; status line under the subtitle; bar and stats line
 at the bottom; nothing wraps, truncates at the end or changes height; on completion Play is focused and the extras disappear).
 
 The phone was not available while this was written: nothing here was run on a device. `stage-3c-test.md` has the on-device steps.
 
 ## Decisions and assumptions
-- **.zip import**: only the *game* import from a .zip is removed (`ImportZip`, the launcher picker, Config's "Re-import from a .zip").
-  Saves keep import and export for both a folder and a .zip (`ImportSavesFromZip` restored). Config > Game files keeps "Re-import from folder".
+- **No .zip**: the game import from a .zip, the saves import from a .zip and the saves export to a .zip are all removed (UI and code:
+  `ImportZip`, `ImportSavesFromZip`, `ExportSavesToZip`, the pickers, the debug `import_zip`/`export_zip` extras). Saves export copies every
+  save file (`0.celeste`, `1.celeste`, `2.celeste` if present, `settings.celeste`) as plain files into a folder picked with Android's folder
+  picker; import reads the plain `.celeste` files from a picked folder, validates them, backs up the current saves, then copies them in.
+  Config > Game files keeps "Re-import from folder".
 - **Legend**: the launcher's bottom-right legend and Config's bottom legend are both removed.
 - **Renderer note**: the actual string was "(applies on the next Play)" (Config row label); the suffix is gone. `PortSetting.NextLaunch` stays
   because it still decides which settings the in-game PORT menu hides.

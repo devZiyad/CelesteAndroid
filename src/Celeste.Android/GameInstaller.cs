@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.IO.Compression;
 using System.Linq;
 using Android.Content;
 using Android.Database;
@@ -121,24 +120,6 @@ namespace CelesteAndroid
 			return saves.Count;
 		}
 
-		/// <summary>Writes the save files (and the settings) into a .zip created with the file picker.</summary>
-		public int ExportSavesToZip(Uri zipUri)
-		{
-			progress("Exporting saves…", -1);
-			List<(string Name, byte[] Data)> saves = ReadCurrentSaves();
-			if (saves.Count == 0)
-				throw new InstallException("There are no save files to export yet.");
-			using Stream output = context.ContentResolver!.OpenOutputStream(zipUri, "wt")
-				?? throw new InstallException("Couldn't write to that file.");
-			using var zip = new ZipArchive(output, ZipArchiveMode.Create);
-			foreach ((string name, byte[] data) in saves)
-			{
-				using Stream entry = zip.CreateEntry(name, CompressionLevel.Optimal).Open();
-				entry.Write(data, 0, data.Length);
-			}
-			return saves.Count;
-		}
-
 		/// <summary>
 		/// Saves from a PC (or another device): a folder with the .celeste files, or the game folder with Saves/ inside.
 		/// </summary>
@@ -157,23 +138,6 @@ namespace CelesteAndroid
 				using var memory = new MemoryStream();
 				input.CopyTo(memory);
 				found.Add((save.Name, memory.ToArray()));
-			}
-			return ImportSaveFiles(found);
-		}
-
-		/// <summary>Saves from a .zip (the files may sit at the top or in a Saves/ folder).</summary>
-		public int ImportSavesFromZip(Uri zipUri)
-		{
-			progress("Reading the .zip…", -1);
-			using Stream input = context.ContentResolver!.OpenInputStream(zipUri) ?? throw new InstallException("Couldn't open the file.");
-			using var zip = new ZipArchive(input, ZipArchiveMode.Read);
-			var found = new List<(string Name, byte[] Data)>();
-			foreach (ZipArchiveEntry entry in zip.Entries.Where(e => e.Name.Length > 0 && IsSaveFileName(e.Name)))
-			{
-				using Stream stream = entry.Open();
-				using var memory = new MemoryStream();
-				stream.CopyTo(memory);
-				found.Add((entry.Name, memory.ToArray()));
 			}
 			return ImportSaveFiles(found);
 		}

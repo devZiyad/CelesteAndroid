@@ -13,7 +13,7 @@ CelesteAndroid is a launcher + runtime that takes the files of the Celeste PC ve
 - **Vulkan by default** (SDL_GPU), with OpenGL ES as a fallback you can pick in the launcher.
 - **Full audio**: FMOD Studio 1.10.14, the same version the game's sound banks were built with.
 - **Launcher**: pick your game folder (or sign in to Steam) and the app copies it, patches it and gets it ready to play.
-- **Bring your saves, take them with you**: *Config > Saves* imports your `.celeste` save files from a folder and exports them to a folder or a .zip. An import is checked first and your current saves are backed up before they are replaced.
+- **Bring your saves, take them with you**: *Config > Saves* imports your `.celeste` save files from a folder and exports them as plain files to a folder. An import is checked first and your current saves are backed up before they are replaced.
 - **Wide screens**: the game keeps its native 16:9 image and the side bars show a blurred version of the game's key art instead of plain black.
 - **Your files stay yours**: the original `Celeste.exe` is never modified. A patched copy is generated on the device with [MonoMod](https://github.com/MonoMod/MonoMod), the same tooling the [Everest](https://everestapi.github.io/) mod loader uses.
 

@@ -36,7 +36,7 @@ namespace CelesteAndroid
 		public const string ActionReimportFolder = "reimport_folder", ActionCheckUpdates = "check_updates";
 
 		private const int ReqSignIn = 20;
-		private const int ReqImportSavesFolder = 11, ReqImportSavesZip = 12, ReqExportSavesFolder = 13, ReqExportSavesZip = 14, ReqReimportFolder = 15;
+		private const int ReqImportSavesFolder = 11, ReqExportSavesFolder = 13, ReqReimportFolder = 15;
 		private static readonly Color Night = Color.ParseColor("#120C22");
 		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
 
@@ -92,14 +92,8 @@ namespace CelesteAndroid
 				case ReqImportSavesFolder:
 					RunJob("Saves imported", installer => $"Imported {installer.ImportSavesFromFolder(uri)} save file(s). The previous saves were backed up first.");
 					break;
-				case ReqImportSavesZip:
-					RunJob("Saves imported", installer => $"Imported {installer.ImportSavesFromZip(uri)} save file(s). The previous saves were backed up first.");
-					break;
 				case ReqExportSavesFolder:
 					RunJob("Saves exported", installer => $"Exported {installer.ExportSavesToFolder(uri)} save file(s).");
-					break;
-				case ReqExportSavesZip:
-					RunJob("Saves exported", installer => $"Exported {installer.ExportSavesToZip(uri)} save file(s).");
 					break;
 				case ReqReimportFolder:
 					Hand(ActionReimportFolder, uri);
@@ -174,24 +168,6 @@ namespace CelesteAndroid
 		}
 
 		private void PickFolder(int request) => StartActivityForResult(new Intent(Intent.ActionOpenDocumentTree), request);
-
-		private void PickZip(int request)
-		{
-			var intent = new Intent(Intent.ActionOpenDocument);
-			intent.AddCategory(Intent.CategoryOpenable);
-			intent.SetType("*/*");
-			intent.PutExtra(Intent.ExtraMimeTypes, new[] { "application/zip", "application/x-zip-compressed" });
-			StartActivityForResult(intent, request);
-		}
-
-		private void CreateZip(int request)
-		{
-			var intent = new Intent(Intent.ActionCreateDocument);
-			intent.AddCategory(Intent.CategoryOpenable);
-			intent.SetType("application/zip");
-			intent.PutExtra(Intent.ExtraTitle, "celeste-saves.zip");
-			StartActivityForResult(intent, request);
-		}
 
 		private void RefreshAccount()
 		{
@@ -283,9 +259,7 @@ namespace CelesteAndroid
 
 			list.AddView(Section("Saves"), SectionParams());
 			list.AddView(ActionRow("Import saves from a folder", "ImportSavesFolder", () => PickFolder(ReqImportSavesFolder)), RowParams());
-			list.AddView(ActionRow("Import saves from a .zip", "ImportSavesZip", () => PickZip(ReqImportSavesZip)), RowParams());
 			list.AddView(ActionRow("Export saves to a folder", "ExportSavesFolder", () => PickFolder(ReqExportSavesFolder)), RowParams());
-			list.AddView(ActionRow("Export saves to a .zip", "ExportSavesZip", () => CreateZip(ReqExportSavesZip)), RowParams());
 
 			list.AddView(Section("Game files"), SectionParams());
 			checkUpdatesRow = ActionRow("Check for updates", "CheckForUpdates", () => Hand(ActionCheckUpdates));

@@ -84,12 +84,12 @@ marks | grep "launcher dialog: Set up Celeste"
   every 5 s. A second `input` event is never needed. If the account does not own Celeste: dialog "Couldn't install from Steam" with
   "Try again"/"OK" (`texts`), and nothing is installed.
 
-## 5. No game .zip import
+## 5. No .zip anywhere
 ```fish
-texts | grep -iE "\.zip"                                  # main screen, chooser, Config: only the two Saves rows "Import saves from a .zip" / "Export saves to a .zip" may appear
-scripts/check-ui.sh --all | grep -ciE "ImportZip|ReimportZip"   # expect 0
+texts | grep -iE "\.zip"                                  # main screen, chooser, Config: expect no output
+scripts/check-ui.sh --all | grep -ciE "ImportZip|ReimportZip|SavesZip"   # expect 0
 ```
-On Config: Saves has "Import saves from a folder", "Import saves from a .zip", "Export saves to a folder", "Export saves to a .zip"; Game files has "Check for updates", "Re-import from folder", "Delete game files" (installed state).
+On Config: Saves has "Import saves from a folder", "Export saves to a folder"; Game files has "Check for updates", "Re-import from folder", "Delete game files" (installed state).
 
 ## 6. Config dialogs return to Config
 For each opener, record FOCUS before (`scripts/check-ui.sh | grep FOCUS`), open the dialog, close it, and compare:
@@ -97,7 +97,6 @@ For each opener, record FOCUS before (`scripts/check-ui.sh | grep FOCUS`), open 
 |---|---|---|---|
 | `DeleteGameFiles` | ENTER | `key 97` (B) or Cancel | Config, FOCUS `DeleteGameFiles` |
 | `DeleteGameFiles` → Delete | ENTER, RIGHT, ENTER | OK | Config, FOCUS `CheckForUpdates` (row removed; see 3) |
-| `ExportSavesZip` (needs a save) | ENTER, pick a place in the picker, confirm | OK on "Saves exported" | Config, FOCUS `ExportSavesZip` |
 | `ExportSavesFolder` | same with a folder | OK | Config, FOCUS `ExportSavesFolder` |
 | `ImportSavesFolder` | pick a folder with `*.celeste` | OK on "Saves imported" | Config, FOCUS `ImportSavesFolder` |
 | `ImportSavesFolder` with an empty folder | pick it | OK on "Couldn't finish" | Config, FOCUS `ImportSavesFolder` |
