@@ -14,11 +14,13 @@ namespace CelesteAndroid.Steam
 	{
 		public const string Ellipsis = "…";
 
-		/// <summary>"1.1 GB" from one gigabyte up, otherwise whole megabytes ("640 MB").</summary>
+		/// <summary>"1.1 GB" from one gigabyte up, otherwise whole megabytes ("640 MB"); a non-zero amount below a megabyte in kilobytes ("123 KB").</summary>
 		public static string FormatBytes(long bytes) =>
 			bytes >= 1L << 30
 				? string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 30):0.0} GB")
-				: string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 20):0} MB");
+				: bytes > 0 && bytes < 1L << 20
+					? string.Create(CultureInfo.InvariantCulture, $"{Math.Max(1, bytes / 1024)} KB")
+					: string.Create(CultureInfo.InvariantCulture, $"{bytes / (double)(1L << 20):0} MB");
 
 		/// <summary>"3.0 MB/s"; below one megabyte per second "512 KB/s".</summary>
 		public static string FormatSpeed(double bytesPerSecond) =>

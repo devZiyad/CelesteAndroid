@@ -138,9 +138,16 @@ namespace CelesteAndroid
 		/// Two labeled phases: "Verifying files (n/N)" (the bar follows the file counter) and "Downloading (a MB / Y MB)" (the bar and the byte
 		/// counters cover only what is downloaded).
 		/// </summary>
+		private string? loggedPhase;
+
 		private void OnProgress(InstallProgress p)
 		{
 			Interlocked.Exchange(ref lastBytes, p.BytesDone);
+			if (p.Phase != loggedPhase)
+			{
+				loggedPhase = p.Phase;
+				LogLine($"steam: phase {p.Phase}: {p.FilesTotal} files" + (p.Phase == "Downloading" ? $", {InstallText.FormatBytes(p.BytesTotal)} to download" : ""));
+			}
 			if (p.Phase == "Downloading")
 			{
 				float fraction = p.BytesTotal == 0 ? 0f : Math.Min(1f, p.BytesDone / (float)p.BytesTotal);
