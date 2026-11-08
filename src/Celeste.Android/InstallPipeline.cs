@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -97,13 +98,23 @@ namespace CelesteAndroid
 				throw new InstallException($"Not enough free space: Celeste needs {InstallCoordinator.FormatBytes(selection.NeededBytes)}, {InstallCoordinator.FormatBytes(free)} available.");
 
 			var installer = new DepotInstaller(gameDir, SteamTokenStore.ResumeStatePath(context), chunks, parallelism: 6, OnProgress);
-			InstallResult result = await installer.InstallAsync(manifest, ct).ConfigureAwait(false);
+			// An update: files that are the same in the installed build's manifest are accepted without hashing; the rest is verified.
+			ISet<string>? trusted = update ? await UpdateChecker.TrustedFilesAsync(session, InstallCoordinator.InstalledManifest(context), selection).ConfigureAwait(false) : null;
+			InstallResult result = await installer.InstallAsync(manifest, ct, trusted).ConfigureAwait(false);
+			LogLine($"steam: downloaded {result.DownloadedFiles} files, {InstallCoordinator.FormatBytes(result.DownloadedBytes)} ({result.DownloadedBytes} bytes)");
 			LogLine($"steam: depot {SteamSession.LinuxDepotId} download completed and verified: files={result.Files} bytes={result.Bytes} (manifest needed set: files={selection.Needed.Count} bytes={selection.NeededBytes}); removed stale files={result.Removed.FilesDeleted}");
 
-			var gameInstaller = new GameInstaller(context, (message, fraction) => Step(message, fraction: fraction));
-			gameInstaller.Patch();
-			gameInstaller.PrepareBackground();
-			LogLine("steam: patching completed");
+			if (update && result.DownloadedFiles == 0 && File.Exists(GameInstaller.PatchedDll(context)))
+			{
+				LogLine("steam: nothing was downloaded: the patched game is still current");
+			}
+			else
+			{
+				var gameInstaller = new GameInstaller(context, (message, fraction) => Step(message, fraction: fraction));
+				gameInstaller.Patch();
+				gameInstaller.PrepareBackground();
+				LogLine("steam: patching completed");
+			}
 
 			InstallCoordinator.SaveInstalledManifest(context, manifest.ManifestId);
 			if (session.LatestBuild is { BuildId: not 0 } build) InstallCoordinator.SaveInstalledBuild(context, build.BuildId);
@@ -123,14 +134,24 @@ namespace CelesteAndroid
 			result is EResult.InvalidPassword or EResult.AccessDenied or EResult.Expired or EResult.Revoked
 				or EResult.AccountLogonDenied or EResult.InvalidLoginAuthCode or EResult.AccountDisabled or EResult.LoggedInElsewhere;
 
+		/// <summary>
+		/// Two labeled phases: "Verifying files (n/N)" (the bar follows the file counter) and "Downloading (a MB / Y MB)" (the bar and the byte
+		/// counters cover only what is downloaded).
+		/// </summary>
 		private void OnProgress(InstallProgress p)
 		{
 			Interlocked.Exchange(ref lastBytes, p.BytesDone);
-			float fraction = p.BytesTotal == 0 ? 0f : Math.Min(1f, p.BytesDone / (float)p.BytesTotal);
-			int percent = (int)(fraction * 100);
-			var stats = new TransferStats(p.FilesDone, p.FilesTotal, p.BytesDone, p.BytesTotal, p.Phase == "Downloading" ? p.BytesPerSecond : 0);
-			string step = InstallText.StepLine(p.Phase == "Verifying" ? "Verifying" : "Downloading", p.CurrentFile);
-			Step(step, fraction: fraction, percent: percent, stats: stats);
+			if (p.Phase == "Downloading")
+			{
+				float fraction = p.BytesTotal == 0 ? 0f : Math.Min(1f, p.BytesDone / (float)p.BytesTotal);
+				string step = $"Downloading ({InstallText.FormatBytes(p.BytesDone)} / {InstallText.FormatBytes(p.BytesTotal)})";
+				Step(step, fraction: fraction, percent: (int)(fraction * 100), stats: new TransferStats(p.FilesDone, p.FilesTotal, p.BytesDone, p.BytesTotal, p.BytesPerSecond));
+			}
+			else
+			{
+				float fraction = p.FilesTotal == 0 ? 0f : Math.Min(1f, p.FilesDone / (float)p.FilesTotal);
+				Step($"Verifying files ({p.FilesDone}/{p.FilesTotal})", fraction: fraction, percent: (int)(fraction * 100));
+			}
 		}
 	}
 }

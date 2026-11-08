@@ -359,6 +359,12 @@ namespace CelesteAndroid.Steam
 
 			var servers = await GetCdnServersAsync().ConfigureAwait(false);
 			var cdn = new SteamKit2.CDN.Client(client);
+			(ManifestSnapshot snapshot, Dictionary<string, DepotManifest.ChunkData> chunkData) = await FetchManifestAsync(cdn, servers, manifestId).ConfigureAwait(false);
+			return (snapshot, new SteamChunkSource(this, cdn, servers, chunkData));
+		}
+
+		private async Task<(ManifestSnapshot, Dictionary<string, DepotManifest.ChunkData>)> FetchManifestAsync(SteamKit2.CDN.Client cdn, List<Server> servers, ulong manifestId)
+		{
 			ulong requestCode = await content.GetManifestRequestCode(LinuxDepotId, AppId, manifestId, Branch).ConfigureAwait(false);
 			DepotManifest manifest = await cdn.DownloadManifestAsync(LinuxDepotId, manifestId, requestCode, servers[0], depotKey, null, null).ConfigureAwait(false);
 
@@ -376,8 +382,26 @@ namespace CelesteAndroid.Steam
 				files.Add(new ManifestFile(ManifestFile.NormalizePath(f.FileName), (long)f.TotalSize, (int)f.Flags,
 					f.FileHash is { Length: > 0 } ? Convert.ToHexString(f.FileHash).ToLowerInvariant() : "", chunks));
 			}
-			var snapshot = new ManifestSnapshot(AppId, LinuxDepotId, manifestId, Branch, files);
-			return (snapshot, new SteamChunkSource(this, cdn, servers, chunkData));
+			return (new ManifestSnapshot(AppId, LinuxDepotId, manifestId, Branch, files), chunkData);
+		}
+
+		/// <summary>
+		/// The manifest of an earlier build (the one that is installed), to tell which files did not change. Null when Steam no longer
+		/// serves it: the caller then verifies the files on disk instead. Needs <see cref="GetManifestAsync"/> to have run (it holds the depot key).
+		/// </summary>
+		public async Task<ManifestSnapshot?> TryGetManifestAsync(ulong manifestId)
+		{
+			try
+			{
+				var servers = await GetCdnServersAsync().ConfigureAwait(false);
+				(ManifestSnapshot snapshot, _) = await FetchManifestAsync(new SteamKit2.CDN.Client(client), servers, manifestId).ConfigureAwait(false);
+				return snapshot;
+			}
+			catch (Exception e) when (e is not OperationCanceledException)
+			{
+				log($"steam: the installed manifest {manifestId} is not available ({e.GetType().Name}): verifying local files instead");
+				return null;
+			}
 		}
 
 		private async Task<List<Server>> GetCdnServersAsync()

@@ -250,7 +250,7 @@ namespace CelesteAndroid
 				try
 				{
 					using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(60));
-					result = await UpdateChecker.CheckAsync(this, cts.Token).ConfigureAwait(false);
+					result = await UpdateChecker.CheckAsync(this, cts.Token, text => RunOnUiThread(() => checkUpdatesLabel.Text = text)).ConfigureAwait(false);
 				}
 				catch (SignInRequiredException e) { error = e.Message; }
 				catch (System.OperationCanceledException) { error = "Steam didn't answer in time. Check your connection and try again."; }
@@ -276,8 +276,7 @@ namespace CelesteAndroid
 				ShowInfo($"Up to date (build {r.Current.BuildId})", "", checkUpdatesRow, null);
 				return;
 			}
-			string size = r.Current.DownloadBytes > 0 ? ", " + InstallCoordinator.FormatBytes(r.Current.DownloadBytes) : "";
-			string title = $"Update available (build {r.Current.BuildId}{size})";
+			string title = $"Update available (build {r.Current.BuildId}): {r.DeltaFiles} {(r.DeltaFiles == 1 ? "file" : "files")}, {InstallCoordinator.FormatBytes(r.DeltaBytes)} to download";
 			string body = r.InstalledBuild is ulong have ? $"You have build {have}." : "Your installed version wasn't tracked yet; the update checks every file.";
 			Log.Info("CelesteAndroid", "[CelesteAndroid] config dialog: " + title);
 			dialog = UiDialog.Show(this, rootFrame, column, title, body,

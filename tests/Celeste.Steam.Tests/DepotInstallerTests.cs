@@ -246,6 +246,46 @@ namespace CelesteAndroid.Steam.Tests
 		}
 
 		[Fact]
+		public async Task The_delta_of_an_installed_game_is_empty_and_an_update_fetches_nothing()
+		{
+			using var dir = new TempDir();
+			(ManifestSnapshot m, FakeDepot depot) = Game();
+			await Installer(dir, depot).InstallAsync(m, CancellationToken.None);
+			depot.Requested.Clear();
+
+			// A new manifest ID with identical content: nothing to fetch, nothing requested, nothing counted.
+			ManifestSnapshot same = m with { ManifestId = 2 };
+			DeltaPlan plan = await Installer(dir, depot).PlanAsync(same, null, CancellationToken.None);
+			Assert.Equal(0, plan.Files);
+			Assert.Equal(0, plan.Bytes);
+			InstallResult r = await Installer(dir, depot).InstallAsync(same, CancellationToken.None);
+			Assert.Equal(0, r.DownloadedFiles);
+			Assert.Empty(depot.Requested);
+		}
+
+		[Fact]
+		public async Task The_delta_of_a_changed_game_counts_only_the_changed_files()
+		{
+			using var dir = new TempDir();
+			(ManifestSnapshot old, FakeDepot depot) = Game(version: 1, id: 1);
+			await Installer(dir, depot).InstallAsync(old, CancellationToken.None);
+			(ManifestSnapshot updated, FakeDepot depot2) = Game(version: 1, id: 2);
+			// Same files except the executable.
+			var changed = updated.Files.Select(f => f.Path == "Celeste.exe" ? depot2.File("Celeste.exe", 3600, 2) : f).ToList();
+			updated = updated with { Files = changed };
+
+			DeltaPlan plan = await Installer(dir, depot2).PlanAsync(updated, null, CancellationToken.None);
+			Assert.Equal(1, plan.Files);
+			Assert.Equal(3600, plan.Bytes);
+
+			var seen = new System.Collections.Concurrent.ConcurrentQueue<InstallProgress>(); // progress arrives from several threads
+			InstallResult r = await Installer(dir, depot2, seen.Enqueue).InstallAsync(updated, CancellationToken.None);
+			Assert.Equal(1, r.DownloadedFiles);
+			Assert.Equal(3600, r.DownloadedBytes);
+			Assert.All(seen.Where(p => p.Phase == "Downloading"), p => Assert.Equal(3600, p.BytesTotal));
+		}
+
+		[Fact]
 		public async Task Cancellation_keeps_the_resume_state()
 		{
 			using var dir = new TempDir();
