@@ -43,11 +43,33 @@ namespace CelesteAndroid
 			base.OnCreate(savedInstanceState);
 			// On Android, FMOD needs the Context for audio and for reading files.
 			Org.Fmod.FMOD.Init(this);
+			PublishVibrator();
 			ShowLoadingScreen();
 			// System Back (button or gesture) asks to return to the launcher; with predictive back (targetSdk 36) a gesture comes as a callback
 			// instead of a key event.
 			if (OperatingSystem.IsAndroidVersionAtLeast(33))
 				OnBackInvokedDispatcher.RegisterOnBackInvokedCallback(0, new BackCallback(this));
+		}
+
+		private Vibrator? vibrator;
+
+		/// <summary>Gives the patched game the phone's vibrator (the "Rumble" setting's Phone / Auto routes): (milliseconds, amplitude 1-255), 0 cancels.</summary>
+		private void PublishVibrator()
+		{
+			vibrator = OperatingSystem.IsAndroidVersionAtLeast(31)
+				? (GetSystemService(VibratorManagerService) as VibratorManager)?.DefaultVibrator
+				: GetSystemService(VibratorService) as Vibrator;
+			if (vibrator == null || !vibrator.HasVibrator)
+			{
+				Log.Info(LogTag, "[CelesteAndroid] rumble: this device has no vibrator");
+				return;
+			}
+			bool amplitude = vibrator.HasAmplitudeControl;
+			AppContext.SetData("CelesteAndroid.Vibrate", new Action<int, int>((ms, amp) =>
+			{
+				if (ms <= 0) { vibrator.Cancel(); return; }
+				vibrator.Vibrate(VibrationEffect.CreateOneShot(ms, amplitude ? amp : VibrationEffect.DefaultAmplitude)!);
+			}));
 		}
 
 		private const int LoadingScreenMaxMs = 25000;

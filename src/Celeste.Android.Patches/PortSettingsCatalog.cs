@@ -63,9 +63,16 @@ namespace CelesteAndroid
 		public static readonly PortSetting Autoplay = new("Autoplay", "Autoplay",
 			new[] { "On", "Off" }, new[] { "true", "false" }, 0);
 
+		/// <summary>
+		/// Where the game's rumble goes. Auto: the controller when it supports rumble, otherwise the phone's vibration. The game's own
+		/// Rumble setting (Off / Half) still applies before this.
+		/// </summary>
+		public static readonly PortSetting Rumble = new("Rumble", "Rumble",
+			new[] { "Auto", "Controller", "Phone", "Off" }, new[] { "auto", "controller", "phone", "off" }, 0);
+
 		public static readonly PortSetting[] All =
 		{
-			Autoplay, Renderer, FrameCap, VSync, ResolutionScale, Overlay, OverlayCorner, ScreenFit, IntegerScaling,
+			Autoplay, Renderer, FrameCap, VSync, ResolutionScale, Overlay, OverlayCorner, ScreenFit, IntegerScaling, Rumble,
 		};
 
 		public static PortSetting? Find(string key) =>
