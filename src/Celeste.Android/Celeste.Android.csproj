@@ -6,7 +6,7 @@
 		<OutputType>Exe</OutputType>
 		<RootNamespace>CelesteAndroid</RootNamespace>
 		<ApplicationId>org.devziyad.celeste</ApplicationId>
-		<ApplicationTitle>Celeste (dev)</ApplicationTitle>
+		<ApplicationTitle>Celeste</ApplicationTitle>
 		<!-- Fallbacks (no git available); _CelesteVersion below sets both from the repository on every build. -->
 		<ApplicationVersion>3</ApplicationVersion>
 		<ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
@@ -34,8 +34,8 @@
 	<PropertyGroup>
 		<!-- Art extracted from the user's game files by scripts/generate-game-art.sh (not in git). -->
 		<GameArtDir>$(MSBuildThisFileDirectory)GameArt\</GameArtDir>
-		<!-- Icon (all builds, if generated) and launcher art/logo (-p:UseGameArt=false removes it: public build). -->
-		<HasGameIcon Condition="Exists('$(GameArtDir)icon\res\mipmap-xxxhdpi\ic_celeste.png')">true</HasGameIcon>
+		<!-- Icon (if generated) and launcher art/logo. Public builds pass -p:UseGameIcon=false -p:UseGameArt=false and keep the fallback icon. -->
+		<HasGameIcon Condition="'$(UseGameIcon)' != 'false' and Exists('$(GameArtDir)icon\res\mipmap-xxxhdpi\ic_celeste.png')">true</HasGameIcon>
 		<HasGameArt Condition="'$(UseGameArt)' != 'false' and Exists('$(GameArtDir)art\res')">true</HasGameArt>
 	</PropertyGroup>
 	<PropertyGroup Condition="'$(AndroidSigningKeyStore)' != ''">

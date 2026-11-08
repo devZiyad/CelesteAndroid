@@ -63,6 +63,60 @@ namespace CelesteAndroid
 			};
 		}
 
+		/// <summary>
+		/// The splash / loading screen: the launcher's night sky, the game's logo (or the name as text), a subtitle and a thin
+		/// indeterminate bar. Drawn over an activity's content and removed with <see cref="FadeOut"/>.
+		/// </summary>
+		public static FrameLayout Splash(Context context, string subtitle)
+		{
+			var root = new FrameLayout(context) { Clickable = true, Focusable = false }; // swallows touches, never takes focus
+			root.Background = new GradientDrawable(GradientDrawable.Orientation.TopBottom!, new int[]
+			{
+				Color.Argb(255, 38, 24, 70), Color.Argb(255, 18, 12, 34),
+			});
+			var column = NoClip(new LinearLayout(context) { Orientation = Orientation.Vertical });
+			column.SetGravity(GravityFlags.Center);
+			root.AddView(column, new FrameLayout.LayoutParams(-2, -2, GravityFlags.Center));
+
+			int logoId = context.Resources!.GetIdentifier("celeste_logo", "drawable", context.PackageName);
+			if (logoId != 0)
+			{
+				var logo = new ImageView(context);
+				logo.SetImageResource(logoId);
+				logo.SetAdjustViewBounds(true);
+				column.AddView(logo, new LinearLayout.LayoutParams(Dp(context, 190), Dp(context, 130)));
+			}
+			else
+			{
+				var title = new TextView(context) { Text = "CELESTE", Gravity = GravityFlags.Center };
+				title.SetTextSize(ComplexUnitType.Sp, 54);
+				title.SetTextColor(Color.White);
+				title.SetTypeface(Typeface.Create("sans-serif", TypefaceStyle.Bold), TypefaceStyle.Bold);
+				title.LetterSpacing = 0.18f;
+				column.AddView(title);
+			}
+			var sub = new TextView(context) { Text = subtitle, Gravity = GravityFlags.Center };
+			sub.SetTextSize(ComplexUnitType.Sp, 15);
+			sub.SetTextColor(Accent);
+			sub.LetterSpacing = 0.06f;
+			column.AddView(sub, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(context, 4) });
+
+			var bar = new ProgressBar(context, null, Android.Resource.Attribute.ProgressBarStyleHorizontal) { Indeterminate = true };
+			bar.IndeterminateTintList = Android.Content.Res.ColorStateList.ValueOf(Accent);
+			column.AddView(bar, new LinearLayout.LayoutParams(Dp(context, 170), Dp(context, 6)) { TopMargin = Dp(context, 22) });
+			return root;
+		}
+
+		/// <summary>Fades <paramref name="view"/> out (short), then removes it from its parent.</summary>
+		public static void FadeOut(View view, int durationMs = 250, System.Action? done = null)
+		{
+			view.Animate()!.Alpha(0f).SetDuration(durationMs)!.WithEndAction(new Java.Lang.Runnable(() =>
+			{
+				(view.Parent as ViewGroup)?.RemoveView(view);
+				done?.Invoke();
+			}))!.Start();
+		}
+
 		/// <summary>Turns off child clipping on a container (the focus outline and shadows may extend past the edge).</summary>
 		public static T NoClip<T>(T group) where T : ViewGroup
 		{

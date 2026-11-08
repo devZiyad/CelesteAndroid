@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the release APK into out/.
-#   out/CelesteAndroid-<version>.apk           public build: no official art, safe to share
-#   out/CelesteAndroid-<version>-personal.apk  (--personal) official icon/logo from your own game files
+#   out/CelesteAndroid-<version>.apk           public build: no official art or icon, safe to share
+#   out/CelesteAndroid-<version>-personal.apk  (--personal) official icon/art/logo from your own game files
 #                                              (+ --embed-game: your game inside the APK) - NEVER share it
 # Signing: ~/.celeste-android/release.jks, alias "celeste", password in $CELESTE_KEYSTORE_PASS.
 # Override with CELESTE_KEYSTORE / CELESTE_KEYSTORE_ALIAS. Without a password: debug key.
@@ -32,14 +32,14 @@ else
 	echo "warning: no release keystore/password: signing with the debug key." >&2
 fi
 
-# The icon (art/icon.*) goes into every build; key art and logo only into personal ones.
+# The generated icon, key art and logo only go into personal builds; the public build keeps the fallback icon.
 "$ROOT/scripts/generate-game-art.sh" >/dev/null
 
 if [ "$PERSONAL" = 1 ]; then
-	NAME="CelesteAndroid-$VERSION-personal.apk"; FLAGS=(-p:UseGameArt=true)
+	NAME="CelesteAndroid-$VERSION-personal.apk"; FLAGS=(-p:UseGameArt=true -p:UseGameIcon=true)
 	[ "$EMBED" = 1 ] && FLAGS+=(-p:EmbedGame=true)
 else
-	NAME="CelesteAndroid-$VERSION.apk"; FLAGS=(-p:UseGameArt=false)
+	NAME="CelesteAndroid-$VERSION.apk"; FLAGS=(-p:UseGameArt=false -p:UseGameIcon=false)
 fi
 
 PUBLISH="$ROOT/build/publish"
@@ -48,8 +48,8 @@ dotnet publish "$PROJECT" -c Release -o "$PUBLISH" "${FLAGS[@]}" "${SIGN[@]}" -n
 APK="$(find "$PUBLISH" -maxdepth 1 -name '*-Signed.apk' | head -n1)"
 [ -n "$APK" ] || die "signed APK not found"
 
-if [ "$PERSONAL" = 0 ] && unzip -l "$APK" | grep -Eq 'assets/game/|celeste_art|celeste_logo'; then
-	die "public APK contains game files/key art/logo; aborting."
+if [ "$PERSONAL" = 0 ] && unzip -l "$APK" | grep -Eq 'assets/game/|celeste_art|celeste_logo|ic_celeste'; then
+	die "public APK contains game files/key art/logo/icon; aborting."
 fi
 cp -f "$APK" "$OUT/$NAME"
 ls -l "$OUT/$NAME"

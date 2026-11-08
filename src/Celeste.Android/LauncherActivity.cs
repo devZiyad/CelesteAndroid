@@ -66,11 +66,16 @@ namespace CelesteAndroid
 			HideSystemBars();
 			LoadArt();
 
-			// "Splash": the art appears alone and the panel slides in right after.
+			// Splash: a short loading screen on a cold start of the app (not when going back to the launcher, not when Autoplay
+			// is about to open the game). The art appears as it fades away and the panel slides in right after.
+			bool showSplash = !splashShown && savedInstanceState == null && !WillAutoplay();
+			splashShown = true;
 			panel.Alpha = 0f;
 			panel.TranslationX = -Dp(32);
-			panel.Animate()!.Alpha(1f).TranslationX(0f).SetStartDelay(650).SetDuration(550)
-				.SetInterpolator(new DecelerateInterpolator(2f))!.Start();
+			if (showSplash)
+				ShowSplash();
+			else
+				SlidePanelIn(650);
 
 			var zoom = new ScaleAnimation(1f, 1.08f, 1f, 1.08f, Dimension.RelativeToSelf, 0.5f, Dimension.RelativeToSelf, 0.4f)
 			{
@@ -91,17 +96,41 @@ namespace CelesteAndroid
 			}
 		}
 
+		private static bool splashShown;
+		private const int SplashMinMs = 700;
+
+		private void ShowSplash()
+		{
+			FrameLayout splash = UiKit.Splash(this, "Native Android port");
+			rootLayout.AddView(splash, Match());
+			StartupTrace.Mark("launcher-splash-shown");
+			long shownAt = SystemClock.ElapsedRealtime();
+			splash.PostDelayed(() =>
+			{
+				Log.Info("CelesteAndroid", $"[CelesteAndroid] splash: launcher hidden after {SystemClock.ElapsedRealtime() - shownAt}ms");
+				SlidePanelIn(120);
+				UiKit.FadeOut(splash, done: EnsureFocus);
+			}, SplashMinMs);
+		}
+
+		private void SlidePanelIn(int delayMs) =>
+			panel.Animate()!.Alpha(1f).TranslationX(0f).SetStartDelay(delayMs).SetDuration(550)
+				.SetInterpolator(new DecelerateInterpolator(2f))!.Start();
+
 		/// <summary>Autoplay is decided once per app process: coming back from the game ("Exit to launcher", the title Exit) must not start it again.</summary>
 		private static bool autoplayHandled;
 
 		/// <summary>Opening the app with the game ready and Autoplay on goes straight into the game.</summary>
+		private bool WillAutoplay() =>
+			!autoplayHandled && !InstallCoordinator.IsActive && InstallCoordinator.PendingMode(this) == null && GameInstaller.IsInstalled(this)
+			&& PortSettings.GetValue(this, PortSettingsCatalog.Autoplay) == "true";
+
 		private void MaybeAutoplay(Bundle? savedInstanceState)
 		{
 			if (autoplayHandled) return;
+			bool go = WillAutoplay();
 			autoplayHandled = true;
-			if (savedInstanceState != null) return; // recreated by the system (e.g. the launcher process died while the game ran)
-			if (InstallCoordinator.IsActive || InstallCoordinator.PendingMode(this) != null || !GameInstaller.IsInstalled(this)) return;
-			if (PortSettings.GetValue(this, PortSettingsCatalog.Autoplay) != "true") return;
+			if (savedInstanceState != null || !go) return; // recreated by the system (e.g. the launcher process died while the game ran)
 			Log.Info(LogTag, "autoplay: starting game");
 			Play();
 			OverridePendingTransition(0, 0);

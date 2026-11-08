@@ -5,6 +5,7 @@ using Android.Content;
 using Android.Content.PM;
 using Android.OS;
 using Android.Views;
+using Android.Widget;
 using Android.Window;
 using Android.Util;
 using Microsoft.Xna.Framework;
@@ -42,10 +43,40 @@ namespace CelesteAndroid
 			base.OnCreate(savedInstanceState);
 			// On Android, FMOD needs the Context for audio and for reading files.
 			Org.Fmod.FMOD.Init(this);
+			ShowLoadingScreen();
 			// System Back (button or gesture) asks to return to the launcher; with predictive back (targetSdk 36) a gesture comes as a callback
 			// instead of a key event.
 			if (OperatingSystem.IsAndroidVersionAtLeast(33))
 				OnBackInvokedDispatcher.RegisterOnBackInvokedCallback(0, new BackCallback(this));
+		}
+
+		private const int LoadingScreenMaxMs = 25000;
+
+		/// <summary>
+		/// The launcher's splash over the game's window until Celeste draws its first screen (the port's state marker is set: the game's own
+		/// loader). Without that signal (an older patched Celeste.dll) it goes away after a fixed time.
+		/// </summary>
+		private void ShowLoadingScreen()
+		{
+			FrameLayout splash = UiKit.Splash(this, "Loading…");
+			AddContentView(splash, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+			StartupTrace.Mark("loading-screen-shown");
+			long shownAt = SystemClock.ElapsedRealtime();
+			var handler = new Handler(Looper.MainLooper!);
+			Java.Lang.Runnable? check = null;
+			check = new Java.Lang.Runnable(() =>
+			{
+				bool ready = AppContext.GetData("CelesteAndroid.State") is string;
+				if (!ready && SystemClock.ElapsedRealtime() - shownAt < LoadingScreenMaxMs)
+				{
+					handler.PostDelayed(check!, 50);
+					return;
+				}
+				StartupTrace.Mark(ready ? "loading-screen-hidden" : "loading-screen-timeout");
+				Log.Info(LogTag, $"[CelesteAndroid] splash: loading screen hidden after {SystemClock.ElapsedRealtime() - shownAt}ms");
+				UiKit.FadeOut(splash);
+			});
+			handler.Post(check);
 		}
 
 		[Obsolete]

@@ -21,6 +21,7 @@ namespace CelesteAndroid
 				return;
 			}
 			last = state;
+			AppContext.SetData("CelesteAndroid.State", state); // read by the app's loading screen (GameActivity)
 			Console.WriteLine("[CelesteAndroid] state: " + state);
 		}
 
