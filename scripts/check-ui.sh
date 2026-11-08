@@ -25,7 +25,7 @@ done
 XML="$(mktemp)"; trap 'rm -f "$XML"' EXIT
 # uiautomator sometimes cannot get an idle state while a progress bar animates: retry a few times.
 for attempt in 1 2 3 4 5; do
-	adb -s "$ANDROID_SERIAL" shell uiautomator dump /sdcard/celeste-ui.xml 2>&1 | grep -q "UI hierarchy dumped" && break
+	adb -s "$ANDROID_SERIAL" shell uiautomator dump /sdcard/celeste-ui.xml 2>&1 | grep -q "dumped to" && break
 	[ "$attempt" = 5 ] && die "uiautomator could not dump the UI"
 	sleep 1
 done
