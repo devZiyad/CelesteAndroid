@@ -28,10 +28,10 @@ The scripts default to these values, so setting them is optional if your layout 
 ## 2. Clone
 
 ```fish
-git clone --recursive https://github.com/BelmanteGu/CelesteAndroid
+git clone --recursive https://github.com/devZiyad/CelesteAndroid
 ```
 
-`external/FNA` (with FNA3D, FAudio, SDL3-CS...) and `external/SDL` (release-3.4.16) are submodules.
+`external/FNA` (with FNA3D, FAudio, SDL3-CS...) and `external/SDL` (release-3.4.20) are submodules.
 
 ## 3. Files you have to supply
 
@@ -42,7 +42,7 @@ These are **not** in the repository and must never be committed (they're in `.gi
 | `Celeste/` | Your Celeste PC copy, **FNA build** (`Celeste.exe`, `FNA.dll`, `Content/`). Steam: *opengl* beta. itch.io: the unzipped Linux build. Used for compiling the patch module and, optionally, for personal builds. |
 | `fmod/libs/android-arm64/` | `libfmod.so`, `libfmodstudio.so`, `fmod.jar` from the FMOD Engine **1.10.14** Android package (`api/lowlevel/lib/arm64-v8a`, `api/studio/lib/arm64-v8a`, `api/lowlevel/lib/fmod.jar`) |
 | `Celeste/lib64/` | *(desktop host)* `libfmod.so.10` and `libfmodstudio.so.10` (FMOD 1.10, shipped with the Linux game); the desktop build copies them as `libfmod.so` / `libfmodstudio.so` |
-| `art/icon.png` (or `.jpg`) | *(optional)* square image for the app icon, used by every build. Without it, personal builds crop the key art and public builds use the original mountain icon. |
+| `art/icon.png` (or `.jpg`) | *(optional)* square image for the app icon of **personal** builds. Without it they crop the key art. Public builds always use the original mountain icon. |
 | `art/logo.png` | *(optional, personal builds)* logo shown in the launcher instead of the text title |
 
 Why 1.10.14: Celeste's `.bank` files were built with FMOD Studio 1.10, and the game's C# FMOD wrapper matches that API.
@@ -62,6 +62,8 @@ scripts/build-release.sh                   # public APK (no official art) -> out
 scripts/build-release.sh --personal        # official icon/logo from YOUR game files (don't share)
 scripts/build-release.sh --personal --embed-game   # also bundles your game (~860 MB; don't share)
 ```
+
+The version name is `git describe --tags --always --dirty` (the fork point is tagged `v1.0.1`) and the version code is the commit count, both set by the project on every build (`_CelesteVersion` in `Celeste.Android.csproj`); Config > About shows them and the APK is named after the version. Release label: "Celeste"; debug: "Celeste (debug)".
 
 Signing: uses `~/.celeste-android/release.jks`, alias `celeste` and the password in `$CELESTE_KEYSTORE_PASS` (override path/alias with `CELESTE_KEYSTORE` / `CELESTE_KEYSTORE_ALIAS`); without a password the debug key is used. Verify with `$ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs out/*.apk`. Keep the same key across builds, or Android won't let you update without uninstalling (which deletes saves).
 
@@ -84,13 +86,23 @@ scripts/deploy-android.sh                  # afterwards: patch + debug APK + pat
 adb -s $ANDROID_SERIAL logcat -s CelesteAndroid DOTNET SDL SDL/GPU fmod
 ```
 
-The release package is `org.devziyad.celeste` ("Celeste (dev)") and the debug build is `org.devziyad.celeste.debug` ("Celeste (debug)"); `deploy-android.sh` uses the debug one unless `--release`. They install alongside the original app. The debug build is `run-as`-able, so the script copies files straight into the app's private storage. To regenerate the patch and background on the device without re-importing:
+The release package is `org.devziyad.celeste` ("Celeste") and the debug build is `org.devziyad.celeste.debug` ("Celeste (debug)"); `deploy-android.sh` uses the debug one unless `--release`. They install alongside the original app. The debug build is `run-as`-able, so the script copies files straight into the app's private storage. To regenerate the patch and background on the device without re-importing:
 
 ```
 adb -s $ANDROID_SERIAL shell am start -n org.devziyad.celeste.debug/org.devziyad.celeste.LauncherActivity --ez repatch true
 ```
 
-`scripts/deploy-android.sh --play` starts the game right away (the launcher gets an `autoplay` extra); `--content` also pushes `Celeste.exe` and `Content/`, which a freshly installed package ID needs once. The launcher is controller-first: D-pad / left stick move the focus, A confirms, B exits; focus and key events are logged under the `CelesteLauncher` logcat tag.
+`scripts/deploy-android.sh --play` starts the game right away (the launcher gets an `autoplay` extra); `--content` also pushes `Celeste.exe` and `Content/`, which a freshly installed package ID needs once. The launcher is controller-first: D-pad / left stick move the focus (wrapping around at the ends), A confirms, B goes back, L1/R1 switch the Config tabs; focus and key events are logged under the `CelesteLauncher` / `CelesteConfig` logcat tags.
+
+### Checks on the phone
+
+```fish
+scripts/check-ui.sh                        # focused control + anything clipped in the current launcher screen (uiautomator, no screenshot)
+scripts/measure-startup.sh --runs 3        # cold launches (autoplay): ms after Play for each phase, ending at Celeste's "DONE LOADING"
+adb -s $ANDROID_SERIAL shell input keyevent KEYCODE_BUTTON_R1    # L1 / R1: Config tabs
+```
+
+`measure-startup.sh` reads `[CelesteAndroid] startup: <phase> +Nms` markers (`StartupTrace`) and Celeste's own `GAME DISPLAYED` / `DONE LOADING` lines from logcat; the phases are the process start, the runtime ready, the SDL main thread, the assembly load and Celeste's `Main`. The script passes the `autoplay` extra itself, so the Autoplay port setting does not matter.
 
 
 To force OpenGL ES: `--es driver OpenGL` on `GameActivity`, or the *Graphics* toggle in the launcher.

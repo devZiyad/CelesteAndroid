@@ -83,8 +83,11 @@ namespace CelesteAndroid
 			}
 
 			CreateChannels();
-			StartForeground(ProgressId, BuildProgress(InstallStatus.None with { Step = "Starting", Title = update ? "Updating Celeste" : "Installing Celeste" }, null),
-				ForegroundService.TypeDataSync);
+			Notification starting = BuildProgress(InstallStatus.None with { Step = "Starting", Title = update ? "Updating Celeste" : "Installing Celeste" }, null);
+			if (OperatingSystem.IsAndroidVersionAtLeast(29))
+				StartForeground(ProgressId, starting, ForegroundService.TypeDataSync);
+			else
+				StartForeground(ProgressId, starting);
 
 			if (worker is { IsCompleted: false })
 				return StartCommandResult.Sticky; // already running: the screen just attaches to it
@@ -219,14 +222,14 @@ namespace CelesteAndroid
 		private void AcquireLocks()
 		{
 			var power = (PowerManager)GetSystemService(PowerService)!;
-			wakeLock = power.NewWakeLock(WakeLockFlags.Partial, "Celeste:install");
+			wakeLock = power.NewWakeLock(WakeLockFlags.Partial, "Celeste:install")!;
 			wakeLock.SetReferenceCounted(false);
 			wakeLock.Acquire(6 * 3600 * 1000L);
 
 			var wifi = (WifiManager?)ApplicationContext!.GetSystemService(WifiService);
 			if (wifi != null)
 			{
-				wifiLock = wifi.CreateWifiLock(OperatingSystem.IsAndroidVersionAtLeast(29) ? Android.Net.WifiMode.FullLowLatency : Android.Net.WifiMode.FullHighPerf, "Celeste:install");
+				wifiLock = wifi.CreateWifiLock(OperatingSystem.IsAndroidVersionAtLeast(29) ? Android.Net.WifiMode.FullLowLatency : Android.Net.WifiMode.FullHighPerf, "Celeste:install")!;
 				wifiLock.SetReferenceCounted(false);
 				wifiLock.Acquire();
 			}

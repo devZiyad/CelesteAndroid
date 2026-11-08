@@ -5,6 +5,8 @@
 CelesteAndroid is a launcher + runtime that takes the files of the Celeste PC version you own and runs them natively on Android: .NET on ARM64, FNA + SDL3, Vulkan (or OpenGL ES) graphics and FMOD audio. It doesn't emulate anything and it doesn't use a browser/WebAssembly.
 
 > [!IMPORTANT]
+This repository is a fork of [BelmanteGu/CelesteAndroid](https://github.com/BelmanteGu/CelesteAndroid) (see [CHANGELOG.md](CHANGELOG.md) for what changed since).
+
 > **No game files are included.** This project doesn't include Celeste or any of its assets. You need a legally owned copy of Celeste for PC. The launcher imports it from your device, the same model PortMaster and other community ports use.
 
 ## Features
@@ -12,7 +14,9 @@ CelesteAndroid is a launcher + runtime that takes the files of the Celeste PC ve
 - **Native**: the game runs on the .NET runtime for ARM64, with FNA, FNA3D and SDL3 built for Android.
 - **Vulkan by default** (SDL_GPU), with OpenGL ES as a fallback you can pick in the launcher.
 - **Full audio**: FMOD Studio 1.10.14, the same version the game's sound banks were built with.
-- **Launcher**: pick your game folder (or sign in to Steam) and the app copies it, patches it and gets it ready to play.
+- **Launcher**: pick your game folder, or sign in to Steam and let the app download the game (in the background, resumable). It then patches the game and gets it ready to play. Everything is controller-first: the D-pad moves, A confirms, B goes back, L1/R1 switch the tabs of **Config** (Port settings, Saves, Game files, Steam account, About), and focus wraps around at every end.
+- **Port settings**: renderer, frame cap, VSync, resolution scale, FPS overlay, screen fit, integer scaling and Autoplay, in *Config* and in the game's own Options menu.
+- **Share logs**: *Config > About > Share logs* writes one plain `.txt` (version, device, port settings, the app's recent log and Celeste's error log, never tokens or account details) and opens Android's share sheet.
 - **Bring your saves, take them with you**: *Config > Saves* imports your `.celeste` save files from a folder and exports them as plain files to a folder. An import is checked first and your current saves are backed up before they are replaced.
 - **Wide screens**: the game keeps its native 16:9 image and the side bars show a blurred version of the game's key art instead of plain black.
 - **Your files stay yours**: the original `Celeste.exe` is never modified. A patched copy is generated on the device with [MonoMod](https://github.com/MonoMod/MonoMod), the same tooling the [Everest](https://everestapi.github.io/) mod loader uses.
@@ -40,7 +44,7 @@ Tested with Celeste **1.4.0.0**.
 
 1. Download `CelesteAndroid-<version>.apk` from [Releases](../../releases) and install it.
 2. Copy your Celeste folder (unzipped, for the itch.io build) to your phone, for example to `Download/`.
-3. Open **Celeste** and tap **Set up**, then **Import from folder**, and select it (or choose **Steam** to download the game).
+3. Open **Celeste** and choose **Set up**, then **Import from folder**, and select it (or choose **Steam** to download the game).
 4. Wait for the import (copy + patch, about 1–2 minutes), then tap **PLAY**.
 
 Your saves live in the app's private storage, and uninstalling the app deletes them. To bring your PC progress over, copy the `Saves` folder from your PC game folder to your phone and use **Config > Saves > Import**. Your current saves are backed up first.
@@ -50,7 +54,7 @@ Your saves live in the app's private storage, and uninstalling the app deletes t
 Short version (Linux; see [docs/BUILDING.md](docs/BUILDING.md) for details):
 
 ```fish
-git clone --recursive https://github.com/BelmanteGu/CelesteAndroid
+git clone --recursive https://github.com/devZiyad/CelesteAndroid
 cd CelesteAndroid
 # 1. Put your Celeste (FNA build) in ./Celeste/ and the FMOD 1.10.14 Android libs in ./fmod/libs/android-arm64/
 # 2. Native libs (SDL3, FNA3D, FAudio) for arm64 with the Android NDK:
@@ -64,8 +68,10 @@ Useful scripts:
 | Script | What it does |
 |---|---|
 | `scripts/build-natives-android.sh` | Builds SDL3, FNA3D and FAudio for Android (NDK r27) |
-| `scripts/build-release.sh` | Release APK. `--personal` adds the official icon/logo taken from *your* game files; `--embed-game` puts your game inside the APK. **Personal APKs must never be shared.** |
+| `scripts/build-release.sh` | Release APK. `--personal` adds the official icon, key art and logo taken from *your* game files; `--embed-game` puts your game inside the APK. **Personal APKs must never be shared.** |
 | `scripts/deploy-android.sh` | Development loop: patch, install the APK and push files over `adb` |
+| `scripts/check-ui.sh` | Checks the launcher UI on the phone from a `uiautomator` dump: focus, bounds, anything clipped (no screenshots) |
+| `scripts/measure-startup.sh` | Cold launches of the game with per-phase timings from logcat (process, runtime, assembly load, content load) |
 | `scripts/fetch-fnalibs.sh` | Downloads the x64 fnalibs for the desktop test host |
 | `scripts/generate-game-art.sh` | Extracts the icon/key art from your game files (for personal builds) |
 
@@ -87,7 +93,7 @@ The patches are small and focused: a Steamworks stub, SDL2 → SDL3 shims, `GetE
 |---|---|
 | ✅ | Boots to the title screen and plays with a controller (Galaxy S23, Snapdragon 8 Gen 2, Android 16) |
 | ✅ | Vulkan and OpenGL ES, 60 FPS, FMOD audio, pause/resume |
-| ✅ | Import from a folder, patching on the device |
+| ✅ | Import from a folder or install from Steam, patching on the device |
 | 🚧 | **On-screen touch controls** (FNA only reads the first of the several touch devices SDL reports) |
 | ✅ | Importing `.celeste` saves |
 | 🚧 | Everest / mods |
@@ -98,7 +104,7 @@ Tested on one device so far. Reports from other phones (especially Mali/Exynos/T
 
 - Celeste © Maddy Makes Games Inc. This project is **not affiliated with or endorsed by** Maddy Makes Games, Extremely OK Games or Firelight Technologies.
 - This repository contains **no** game code or assets. The game is loaded from the user's own copy at runtime.
-- The app icon of the released APK uses Madeline artwork from Celeste (© Maddy Makes Games), as fan ports commonly do. The icon file isn't in this repository. Builds from source use the original mountain icon unless you provide `art/icon.png`.
+- The public APK uses a generic mountain icon and no Celeste art. *Personal* builds (`scripts/build-release.sh --personal`, never shared) use the icon, key art and logo generated from your own game files by `scripts/generate-game-art.sh`; those files aren't in this repository.
 - **FMOD**: the released APK includes the FMOD Studio 1.10.14 runtime libraries. *FMOD Studio by Firelight Technologies Pty Ltd.* FMOD isn't open source and is **not** covered by this project's MIT license. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Credits

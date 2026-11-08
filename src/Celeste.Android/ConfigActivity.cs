@@ -381,7 +381,7 @@ namespace CelesteAndroid
 		private void AddAbout(LinearLayout panel)
 		{
 			Android.Content.PM.PackageInfo? info = PackageManager!.GetPackageInfo(PackageName!, 0);
-			string version = $"{info?.VersionName ?? "?"} (build {info?.LongVersionCode})";
+			string version = $"{info?.VersionName ?? "?"} (build {VersionCode.Of(info)})";
 			panel.AddView(Text("Celeste — native Android port", UiKit.BodySp, Color.White, TypefaceStyle.Bold),
 				new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), TopMargin = Dp(6), BottomMargin = Dp(4) });
 			var versionText = Text("Version " + version, UiKit.SecondarySp, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);

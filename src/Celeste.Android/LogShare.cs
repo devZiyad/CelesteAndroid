@@ -63,7 +63,7 @@ namespace CelesteAndroid
 			Android.Content.PM.PackageInfo? info = context.PackageManager!.GetPackageInfo(context.PackageName!, 0);
 			sb.AppendLine("Celeste Android — logs");
 			sb.AppendLine($"Created: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}Z");
-			sb.AppendLine($"App: {context.PackageName} {info?.VersionName} (build {info?.LongVersionCode})");
+			sb.AppendLine($"App: {context.PackageName} {info?.VersionName} (build {VersionCode.Of(info)})");
 			sb.AppendLine($"Device: {Build.Manufacturer} {Build.Model} ({Build.Device})");
 			sb.AppendLine($"Android: {Build.VERSION.Release} (API {(int)Build.VERSION.SdkInt}), ABI {(Build.SupportedAbis is { Count: > 0 } abis ? abis[0] : "?")}");
 			sb.AppendLine($"Game installed: {(GameInstaller.IsInstalled(context) ? "yes" : "no")}");

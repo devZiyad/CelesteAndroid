@@ -79,11 +79,12 @@ namespace CelesteAndroid
 			handler.Post(check);
 		}
 
-		[Obsolete]
+#pragma warning disable CS0672 // the legacy callback is still what Activity.onKeyUp calls for a Back key on 3-button navigation
 		public override void OnBackPressed()
 		{
 			if (!forwardingGamepadBack) AskReturnToLauncher(); // Activity.onKeyUp calls this for any Back key, gamepad ones included
 		}
+#pragma warning restore CS0672
 
 		private bool forwardingGamepadBack;
 		private long gamepadBackAt; // uptime (ms) of the last gamepad Back key event; the back callback cannot see a key's source
@@ -204,7 +205,7 @@ namespace CelesteAndroid
 
 		// SDL calls this when it creates the window and would switch the activity to FULL_USER (portrait allowed),
 		// overriding the manifest: the port is landscape only.
-		public override void SetOrientationBis(int w, int h, bool resizable, string hint)
+		public override void SetOrientationBis(int w, int h, bool resizable, string? hint)
 		{
 			RequestedOrientation = ScreenOrientation.SensorLandscape;
 		}

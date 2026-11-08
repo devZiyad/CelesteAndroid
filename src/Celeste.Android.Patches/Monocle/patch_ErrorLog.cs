@@ -12,8 +12,8 @@ namespace Monocle
 
 		/// <summary>
 		/// The original opens errorLog.txt with the system default program (Process.Start), which does not exist on Android
-		/// (the log is still written by ErrorLog.Write). On desktop it calls the original without letting a
-		/// do Process.Start derrubar o tratamento do crash.
+		/// (the log is still written by ErrorLog.Write). On desktop it calls the original, and a failing
+		/// Process.Start must not break the crash handling, so its exceptions are swallowed.
 		/// </summary>
 		public static void Open()
 		{

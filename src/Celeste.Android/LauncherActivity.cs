@@ -60,6 +60,12 @@ namespace CelesteAndroid
 		protected override void OnCreate(Bundle? savedInstanceState)
 		{
 			base.OnCreate(savedInstanceState);
+			StartupTrace.Mark("launcher-create");
+
+			// Autoplay first: the game's process starts while this screen is still being built (the order does not change what is shown).
+			bool autoplaying = WillAutoplay();
+			MaybeAutoplay(savedInstanceState);
+
 			View root = BuildLayout();
 			SetContentView(root);
 			WatchFocus(root);
@@ -68,7 +74,7 @@ namespace CelesteAndroid
 
 			// Splash: a short loading screen on a cold start of the app (not when going back to the launcher, not when Autoplay
 			// is about to open the game). The art appears as it fades away and the panel slides in right after.
-			bool showSplash = !splashShown && savedInstanceState == null && !WillAutoplay();
+			bool showSplash = !splashShown && savedInstanceState == null && !autoplaying;
 			splashShown = true;
 			panel.Alpha = 0f;
 			panel.TranslationX = -Dp(32);
@@ -85,8 +91,6 @@ namespace CelesteAndroid
 				Interpolator = new AccelerateDecelerateInterpolator(),
 			};
 			art.StartAnimation(zoom);
-
-			MaybeAutoplay(savedInstanceState);
 
 			// An install that was interrupted (process killed, reboot) resumes by itself; the main screen shows its progress.
 			if (!InstallCoordinator.IsActive && InstallCoordinator.PendingMode(this) is string pending && SteamTokenStore.HasSession(this))
@@ -133,7 +137,12 @@ namespace CelesteAndroid
 			if (savedInstanceState != null || !go) return; // recreated by the system (e.g. the launcher process died while the game ran)
 			Log.Info(LogTag, "autoplay: starting game");
 			Play();
-			OverridePendingTransition(0, 0);
+			if (OperatingSystem.IsAndroidVersionAtLeast(34))
+				OverrideActivityTransition(OverrideTransition.Open, 0, 0);
+			else
+#pragma warning disable CA1422 // OverridePendingTransition is only obsolete from API 34, where the branch above runs
+				OverridePendingTransition(0, 0);
+#pragma warning restore CA1422
 		}
 
 		private Action<InstallStatus>? statusHandler;
@@ -180,7 +189,7 @@ namespace CelesteAndroid
 			base.OnResume();
 			HideSystemBars();
 			RefreshState();
-			LogDataInventory();
+			ScheduleDataInventory();
 
 			// Development: files already copied by scripts/deploy-android.sh; only patch + background.
 			// adb shell am start -n org.devziyad.celeste/.LauncherActivity --ez repatch true
@@ -227,6 +236,20 @@ namespace CelesteAndroid
 		/// that a deploy did not erase it. "android.app.ActivityThread.IDS.xml" belongs to Android itself (a framework
 		/// counter, rewritten on every update) and is left out.
 		/// </summary>
+		private static bool inventoryScheduled;
+		private bool gameStarted;
+
+		/// <summary>
+		/// Once per app process, shortly after the screen is up, and never when the game is starting (walking the game's 1200 files
+		/// competes with its startup for CPU and storage).
+		/// </summary>
+		private void ScheduleDataInventory()
+		{
+			if (inventoryScheduled) return;
+			inventoryScheduled = true;
+			panel.PostDelayed(() => { if (!gameStarted) LogDataInventory(); }, 1500);
+		}
+
 		private void LogDataInventory()
 		{
 			string? filesDir = FilesDir?.AbsolutePath;
@@ -506,15 +529,13 @@ namespace CelesteAndroid
 
 		private void Play()
 		{
+			gameStarted = true;
 			var intent = new Intent(this, typeof(GameActivity));
 			string driver = PortSettings.GetValue(this, PortSettings.Renderer);
 			if (driver == "OpenGL")
 				intent.PutExtra(GameActivity.ExtraDriver, driver);
 			StartActivity(intent);
 		}
-
-		/// <summary>Installs (or updates) the game from Steam; the download resumes where it stopped.</summary>
-		private void StartSteam() => StartActivityForResult(new Intent(this, typeof(SteamActivity)), RequestSteam);
 
 		private void PickFolder()
 		{

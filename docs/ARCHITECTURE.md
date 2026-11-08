@@ -17,16 +17,20 @@ Celeste is a C# game built on **FNA** (an XNA 4 reimplementation). `Celeste.exe`
 src/
   Celeste.Android/           .NET for Android app (launcher + game activity)
     LauncherActivity.cs      main screen: key art, Play (or Set up / Installing… when not playable) and Config; install progress (status line, bar, stats line); autoplay
-    ConfigActivity.cs        Config: Port settings, Saves (import/export), Game files (check for updates, re-import, delete), Steam account
+    ConfigActivity.cs        Config, five tabs (L1/R1): Port settings, Saves (import/export), Game files (check for updates, re-import, delete), Steam account, About (version, Share logs)
+    ControllerActivity.cs    base of the launcher screens: D-pad/stick focus movement with wrap-around, A/B/L1/R1, focus logging
+    UiKit.cs, UiDialog.cs    shared look: type scale, focus style, key-art backdrop, splash/loading screen, pill buttons, modal dialog
+    LogShare.cs              Share logs: scrubbed plain-text report + read-only content provider for the share sheet
+    StartupTrace.cs          startup phase markers in logcat (read by scripts/measure-startup.sh)
     SteamActivity.cs         sign-in only (username/password + Steam Guard, or QR for another device); returns to the launcher, which starts the install
     InstallService.cs        foreground service (dataSync) that downloads and installs from Steam; InstallPipeline.cs is one attempt, InstallCoordinator.cs the shared state
     GameInstaller.cs         import (SAF folder, embedded assets) → MonoMod patch → blurred background; saves import/export
     GameActivity.cs          SDLActivity subclass, process ":game"; runs the game on the SDL thread
     CelesteLauncher.cs       loads the patched Celeste.dll and invokes Celeste.Main via reflection
-    HelloGame.cs             minimal FNA game (stack smoke test; used if the game isn't installed)
   Celeste.Android.Patches/   MonoMod patch module (Celeste.Android.mm.dll), merged into Celeste.dll
   Celeste.Patcher/           wraps MonoModder: Celeste.exe + mm.dll → Celeste.dll (desktop and device)
-  Celeste.Desktop/           Windows x64 host running the same patched dll (fast iteration)
+  Celeste.Desktop/           Linux x64 host running the same patched dll (optional dev tool)
+  Celeste.Steam/             Steam install logic without Android dependencies (SteamKit2 session, depot download, log scrubber); tests in tests/
   Steamworks.NET/            stub with the exact signatures Celeste references
 external/FNA, external/SDL   submodules
 scripts/                     natives build, release build, device deploy, art extraction
@@ -50,7 +54,7 @@ scripts/                     natives build, release build, device deploy, art ex
 | `Assembly.GetEntryAssembly()` is used to scan the game's own types (Tracker, Pooler, Overworld, Commands). Under a host the entry assembly is the host (or null on Android). | Relinked to return the Celeste assembly |
 | `Engine.AssemblyDirectory` comes from `Assembly.Location` (empty when loaded on Android) | Set by reflection from the host |
 | `GCSettings.LatencyMode = SustainedLowLatency` throws `PlatformNotSupportedException` on the Android Mono runtime | Relinked to a shim that sets it via reflection and ignores that exception. It *must* go through reflection: a direct call inside the shim would itself be relinked → infinite recursion. |
-| `ErrorLog.Open()` launches the log with `Process.Start` | Replaced with a no-op (the log is still written) |
+| `ErrorLog.Open()` launches the log with `Process.Start` | Hook: a no-op on Android (the log is still written; Config > About > Share logs includes it) |
 | 19.5:9 screens show black pillarbox bars | `Engine.RenderCore` replaced: draws `background.png` (blurred, darkened key art) full-screen, then fills the 16:9 game viewport with the clear color and renders the scene as usual |
 | `Celeste.exe` is flagged 32-bit (`32BITREQUIRED`) | The patcher clears the flag (ILOnly, AnyCPU) |
 
@@ -58,7 +62,7 @@ scripts/                     natives build, release build, device deploy, art ex
 
 ## Native side
 
-- **SDL 3.4.16**, **FNA3D** and **FAudio** are built with NDK r27d for arm64-v8a, API 26, with 16 KB page alignment. They depend only on system libraries (no `libc++_shared`).
+- **SDL 3.4.20**, **FNA3D** and **FAudio** are built with NDK r27d for arm64-v8a, API 26, with 16 KB page alignment. They depend only on system libraries (no `libc++_shared`).
 - FNA3D includes both drivers. The default is **SDL_GPU → Vulkan** (Adreno 740: *Vulkan Conformance 1.3*). OpenGL ES can be forced with `FNA3D_FORCE_DRIVER=OpenGL`. It has to be set with `SDL_SetHint`: on Unix, .NET's `Environment.SetEnvironmentVariable` doesn't reach native `getenv`.
 - SPIR-V goes straight to Vulkan. `SDL_shadercross` is optional, loaded at runtime only if present, and not needed.
 - `FNADllMap` is inert on Android (no `.dll.config`), so `DllImport("SDL3")` resolves to `libSDL3.so` naturally.
@@ -79,10 +83,10 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
 ## Release build
 
 - **No trimming, no AOT.** The game is loaded at runtime and uses reflection and `XmlSerializer` over the whole framework, including the .NET Framework facades (`mscorlib`, `System.Xml`...) that `Celeste.exe` references. AOT requires trimming in .NET for Android, so the release runs on JIT, like the debug build.
-- Official art is generated by `scripts/generate-game-art.ps1` into `GameArt/` (git-ignored), in two independent parts:
-  - `GameArt/icon`: the app icon, used by **every** build when present (`art/icon.png|jpg`, or a crop of the key art). The whole image sits in the central 72dp of the adaptive icon, so launcher masks never crop the face.
+- Official art is generated by `scripts/generate-game-art.sh` into `GameArt/` (git-ignored), in two independent parts:
+  - `GameArt/icon`: the app icon (`art/icon.png|jpg`, or a crop of the key art). The whole image sits in the central 72dp of the adaptive icon, so launcher masks never crop the face. Used by personal builds and by the debug build when present; the public APK is built with `-p:UseGameIcon=false` and keeps the fallback mountain icon.
   - `GameArt/art`: the launcher background (the user's `Content/Graphics/SplashScreen.png`) and logo (`art/logo.png`), **personal builds only**. The public APK is built with `-p:UseGameArt=false` and shows the key art from the *imported* game instead.
-  Resource *aliases* (`@mipmap/app_icon`, `@drawable/launcher_art`) switch between the generated art and the original fallbacks. `build-release.ps1` always builds clean and aborts if a public APK contains game files, the key art or the logo.
+  Resource *aliases* (`@mipmap/app_icon`, `@drawable/launcher_art`) switch between the generated art and the original fallbacks. `build-release.sh` always builds clean and aborts if a public APK contains game files, the key art, the logo or the generated icon.
 
 ## Gotchas found along the way
 
@@ -91,7 +95,7 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
 - **SDL Java bindings**: a few protected fields use package-private types. They're removed in `Transforms/Metadata.xml`.
 - **FNA viewport after `ApplyChanges`**: on Android the internal viewport stays at the first backbuffer size (800×480). Celeste sets its own viewport every frame, so it isn't affected. `HelloGame` resets it explicitly.
 - **Touch**: SDL reports **3 touch devices** on the S23, but FNA's `UpdateTouchPanelState` only polls device index 0, so touches never reach `TouchPanel`. This has to be fixed before on-screen controls.
-- **fnalibs**: the old archive URL is gone. The dailies are GitHub Actions artifacts, fetched via nightly.link (`scripts/fetch-fnalibs.ps1`).
+- **fnalibs**: the old archive URL is gone. The dailies are GitHub Actions artifacts, fetched via nightly.link (`scripts/fetch-fnalibs.sh`).
 
 ## Roadmap
 
@@ -151,3 +155,18 @@ MonoMod (and Mono.Cecil) run inside the launcher. The things that were needed:
   when it can, and deletes the token and its Keystore key; game files and saves are kept.
 - The in-game PORT section lists only settings that apply live. Renderer (needs a restart) is only in Config.
 - Logcat markers for scripted checks: `CelesteInstall: progress: ...` every 5 s, `[CelesteAndroid] menu PORT: ...`, `menu pause: ...`, `viewport x,y,w,h ...`.
+
+## Polish (stage 3d)
+
+- **Navigation.** `ControllerActivity` moves focus itself (D-pad keys, stick, hat), never the system: Up/Down/Left/Right wrap at the ends of every screen and dialog
+  (`WrapTarget`). A screen may supply an explicit Up/Down order (`VerticalRing`; Config uses *selected tab, then its rows*). L1/R1 call `OnShoulder`
+  (Config switches tabs). Logcat: `move: <dir> -> <control>`, `[CelesteAndroid] config tab: <name>`.
+- **Look.** `UiKit` holds the type scale, the one focus style (accent outline + soft fill), the dimmed key-art backdrop (Config, Steam), the splash/loading screen and the shared pill
+  button. Screens fade into each other (`Animation.Celeste`), tabs and dialogs fade in. The launcher shows the splash on a cold start (not under Autoplay);
+  `GameActivity` shows the same screen over the game window until Celeste's loader appears (`PortState` sets `CelesteAndroid.State`; a 25 s cap covers an older patched dll).
+  Logcat: `[CelesteAndroid] splash: ... hidden after Nms`.
+- **Version.** `_CelesteVersion` (csproj) sets versionName from `git describe --tags --always --dirty` and versionCode from the commit count before the manifest is generated.
+- **Share logs.** `LogShare.CreateReport` writes `cache/logs/celeste-logs-<time>.txt` (one file, the previous one is deleted): header (app, device, Android, port settings), Celeste's
+  `error_log.txt` if any, the app's own `logcat -d -t 4000`. `LogScrubber` (Celeste.Steam, unit tested) drops lines that mention tokens, passwords and similar, and masks the Steam
+  account name, JWT-like strings, Steam IDs, e-mails and long opaque strings. `LogShareProvider` serves the file read-only (authority `<applicationId>.logs`) to the share sheet.
+- **Startup.** `StartupTrace` logs phase markers; `scripts/measure-startup.sh` turns them into per-phase numbers. Numbers: `docs/STARTUP.md`.
