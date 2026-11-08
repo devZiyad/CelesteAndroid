@@ -7,6 +7,7 @@
 		<RootNamespace>CelesteAndroid</RootNamespace>
 		<ApplicationId>org.devziyad.celeste</ApplicationId>
 		<ApplicationTitle>Celeste (dev)</ApplicationTitle>
+		<!-- Fallbacks (no git available); _CelesteVersion below sets both from the repository on every build. -->
 		<ApplicationVersion>3</ApplicationVersion>
 		<ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
 		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
@@ -88,6 +89,34 @@
 		<ProjectReference Include="..\Celeste.Android.Patches\Celeste.Android.Patches.csproj"
 			ReferenceOutputAssembly="false" OutputItemType="CelestePatchModule" />
 	</ItemGroup>
+
+	<!-- versionName = `git describe` (tag, commits since it, hash, -dirty with uncommitted changes); versionCode = number of commits,
+	     so it only ever increases along a branch. -->
+	<Target Name="_CelesteVersion" BeforeTargets="_GetAndroidPackageName;BeforeBuild" Condition="'$(_GitDescribe)' == ''">
+		<Exec Command="git describe --tags --always --dirty" WorkingDirectory="$(MSBuildThisFileDirectory)" ConsoleToMSBuild="true"
+			StandardOutputImportance="low" IgnoreExitCode="true" ContinueOnError="true" StandardErrorImportance="low">
+			<Output TaskParameter="ConsoleOutput" PropertyName="_GitDescribe" />
+		</Exec>
+		<Exec Command="git rev-list --count HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)" ConsoleToMSBuild="true"
+			StandardOutputImportance="low" IgnoreExitCode="true" ContinueOnError="true" StandardErrorImportance="low">
+			<Output TaskParameter="ConsoleOutput" PropertyName="_GitCommitCount" />
+		</Exec>
+		<PropertyGroup>
+			<ApplicationDisplayVersion Condition="'$(_GitDescribe)' != ''">$(_GitDescribe.TrimStart('v'))</ApplicationDisplayVersion>
+			<ApplicationVersion Condition="'$(_GitCommitCount)' != ''">$(_GitCommitCount)</ApplicationVersion>
+		</PropertyGroup>
+		<!-- The manifest is only regenerated when its inputs are newer: a changed version must count as a changed input (the stamp of the target that makes the manifest is deleted). -->
+		<PropertyGroup>
+			<_VersionStamp>$(IntermediateOutputPath)celeste-version.txt</_VersionStamp>
+			<_NewVersion>$(ApplicationDisplayVersion)|$(ApplicationVersion)</_NewVersion>
+		</PropertyGroup>
+		<ReadLinesFromFile File="$(_VersionStamp)" Condition="Exists('$(_VersionStamp)')">
+			<Output TaskParameter="Lines" PropertyName="_OldVersion" />
+		</ReadLinesFromFile>
+		<WriteLinesToFile File="$(_VersionStamp)" Lines="$(_NewVersion)" Overwrite="true" Condition="'$(_OldVersion)' != '$(_NewVersion)'" />
+		<Delete Files="$(IntermediateOutputPath)stamp\_GenerateJavaStubs.stamp" Condition="'$(_OldVersion)' != '$(_NewVersion)'" />
+		<Message Importance="high" Text="Celeste version: $(ApplicationDisplayVersion) (code $(ApplicationVersion))" />
+	</Target>
 
 	<!-- The patch runs on the device: MonoMod needs the patches module and the DLLs that the
 	     generated Celeste.dll references (FNA, Steamworks.NET) as files, not from the assembly store. -->

@@ -19,7 +19,7 @@ done
 
 PROJECT="$ROOT/src/Celeste.Android/Celeste.Android.csproj"
 OUT="$ROOT/out"; mkdir -p "$OUT"
-VERSION="$(sed -n 's:.*<ApplicationDisplayVersion>\(.*\)</ApplicationDisplayVersion>.*:\1:p' "$PROJECT" | head -n1)"
+VERSION="$(git -C "$ROOT" describe --tags --always --dirty | sed 's/^v//')"
 
 KEYSTORE="${CELESTE_KEYSTORE:-$HOME/.celeste-android/release.jks}"
 ALIAS="${CELESTE_KEYSTORE_ALIAS:-celeste}"
