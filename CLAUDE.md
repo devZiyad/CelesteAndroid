@@ -41,6 +41,7 @@ See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
 ## MonoMod patches (`src/Celeste.Android.Patches`)
 - **Additive hooks only.** Wrap with `orig_X()` plus extra logic, or add new members/types; never `[MonoModReplace]` a whole method and never
   rewrite a menu-building method (append items after `orig_Create` instead). This keeps the patches compatible with Everest (stage 5).
+- **No auto-properties, no attributes with enum arguments in patch code.** MonoMod's on-device `PatchField` clones the backing field's `[DebuggerBrowsable(<enum>)]` and must resolve the enum from `System.Runtime`, which is not a file on the phone: the Steam install then fails at "Patching Celeste.exe". Use plain fields. Always test a patch change with a `--no-files` deploy and a Set up → Steam run (on-device patch), not only the desktop build.
   `docs/EVEREST.md` holds the audit table against the Everest source in `refs/Everest` (gitignored shallow checkout of the commit matching the
   installed Everest) and the known conflicts.
 

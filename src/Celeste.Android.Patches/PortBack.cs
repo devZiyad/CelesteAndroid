@@ -15,7 +15,9 @@ namespace CelesteAndroid
 		public const string Key = "CelesteAndroid.BackRequest";
 
 		/// <summary>True from "show" until "yes" / "no" (the confirmation is on screen); <see cref="PortState"/> reports it.</summary>
-		public static bool Showing { get; private set; }
+		// A plain field, not an auto-property: MonoMod's PatchField clones the backing field's [DebuggerBrowsable(<enum>)] attribute and has to
+		// resolve that enum from System.Runtime, which does not exist as a file on the device (the on-device patch would fail).
+		public static bool Showing;
 
 		private static bool pausedByUs;
 		private static bool exitWanted;

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,7 +34,7 @@ namespace CelesteAndroid
 		private const int ResultId = 42;
 		private const string LogTag = "CelesteInstall";
 		/// <summary>Consecutive failed attempts, with no byte of progress between them, before giving up.</summary>
-		private const int MaxFailures = 30;
+		private const int MaxFailures = 30, MaxOtherFailures = 3;
 
 		private static CancellationTokenSource? cts;
 		private PowerManager.WakeLock? wakeLock;
@@ -135,8 +136,10 @@ namespace CelesteAndroid
 					{
 						if (pipeline.BytesDone > 0) failures = 0;
 						failures++;
-						Log.Warn(LogTag, $"attempt failed ({failures}/{MaxFailures}): {Describe(e)}");
-						if (failures >= MaxFailures)
+						bool network = IsNetwork(e);
+						int limit = network ? MaxFailures : MaxOtherFailures; // a bug (e.g. the patch step) is not fixed by waiting
+						Log.Warn(LogTag, $"attempt failed ({failures}/{limit}, {(network ? "network" : "other")}): {Describe(e)}\n{e}");
+						if (failures >= limit)
 						{
 							InstallCoordinator.ClearPending(this);
 							InstallCoordinator.Publish(new InstallStatus(InstallStage.Failed, "Couldn't install from Steam", Describe(e)));
@@ -146,7 +149,7 @@ namespace CelesteAndroid
 						for (int left = wait; left > 0; left--)
 						{
 							InstallCoordinator.Publish(new InstallStatus(InstallStage.Waiting, update ? "Updating Celeste" : "Installing Celeste",
-								$"Connection lost. Retrying in {left} s…", Describe(e)));
+								network ? $"Connection lost. Retrying in {left} s…" : $"Something went wrong. Retrying in {left} s…", Describe(e)));
 							await Task.Delay(1000, ct).ConfigureAwait(false);
 						}
 					}
@@ -187,6 +190,15 @@ namespace CelesteAndroid
 		private static bool IsPermanent(Exception e) =>
 			e is NotOwnedException or InstallException or DepotInstallException or InvalidOperationException
 				|| (e is IOException io && io is not EndOfStreamException && io.Message.Contains("space", StringComparison.OrdinalIgnoreCase));
+
+		/// <summary>Errors a retry can fix: the connection dropped, a server timed out, Steam disconnected.</summary>
+		private static bool IsNetwork(Exception e) => e switch
+		{
+			FileNotFoundException or DirectoryNotFoundException => false, // not a connection problem (e.g. Cecil's AssemblyResolutionException)
+			SocketException or IOException or System.Net.Http.HttpRequestException or TimeoutException or SteamException => true,
+			AggregateException a => a.InnerExceptions.Any(IsNetwork),
+			_ => e.InnerException != null && IsNetwork(e.InnerException),
+		};
 
 		private static string Describe(Exception e) => e switch
 		{
