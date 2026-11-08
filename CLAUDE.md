@@ -63,6 +63,11 @@ See `docs/BUILDING.md` and `docs/ARCHITECTURE.md`.
 - Read an image only when a scripted check fails or a visual cannot be verified otherwise, and then downscale to <= 800 px wide JPEG and crop to the relevant region first.
 - Never read the same screen twice to "confirm": trust the scripted check.
 
+## Device safety
+- Never change device-wide settings or system properties on the phone (`setprop`, `debug.*`, `settings put`, global/secure settings...). Experiments go in app code or app-local config (the app's own files) only.
+- No long relaunch loops (repeated force-stop/start of the app): the user may be using the phone. Keep measurements to the few launches asked for.
+- GC tuning (`MONO_GC_PARAMS`) was tried and dropped; do not revisit it.
+
 ## Phone connectivity
 - Never disable the phone's Wi-Fi or mobile data (`svc wifi/data disable`, airplane mode, ...): wireless adb is the only link and it may not come back. For offline checks, block only the app's network (per-app rule) or have the user do the offline step.
 
