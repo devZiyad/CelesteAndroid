@@ -84,6 +84,7 @@ namespace CelesteAndroid
 			if (update && GameInstaller.IsInstalled(context) && InstallCoordinator.InstalledManifest(context) == manifest.ManifestId)
 			{
 				LogLine($"steam: update check: manifest {manifest.ManifestId} is already installed");
+				if (session.LatestBuild is { BuildId: not 0 } known) InstallCoordinator.SaveInstalledBuild(context, known.BuildId);
 				InstallCoordinator.ClearPending(context);
 				InstallCoordinator.Publish(new InstallStatus(InstallStage.Done, InstallCoordinator.UpToDateTitle, "You already have the latest version from Steam.", Fraction: 1f, Percent: 100));
 				return;
@@ -105,6 +106,8 @@ namespace CelesteAndroid
 			LogLine("steam: patching completed");
 
 			InstallCoordinator.SaveInstalledManifest(context, manifest.ManifestId);
+			if (session.LatestBuild is { BuildId: not 0 } build) InstallCoordinator.SaveInstalledBuild(context, build.BuildId);
+			LogLine($"steam: stored installed build {session.LatestBuild?.BuildId} and depot manifest {manifest.ManifestId}");
 			InstallCoordinator.ClearPending(context);
 			InstallCoordinator.Publish(new InstallStatus(InstallStage.Done, "Celeste is ready", "Installed from Steam. You can play offline.", Fraction: 1f, Percent: 100));
 		}

@@ -65,6 +65,7 @@ namespace CelesteAndroid
 
 			CopyAll(files.Select(f => (f.relative, f.doc.Size,
 				(Func<Stream>)(() => resolver.OpenInputStream(DocumentsContract.BuildDocumentUriUsingTree(treeUri, f.doc.Id)!)!))));
+			InstallCoordinator.ClearInstalledManifest(context); // no longer the Steam build we tracked
 		}
 
 		/// <summary>Personal APK: copies the game embedded in the assets.</summary>
@@ -74,6 +75,7 @@ namespace CelesteAndroid
 			var files = new List<string>();
 			CollectAssets(GameAssetsRoot, files);
 			CopyAll(files.Select(f => (f[(GameAssetsRoot.Length + 1)..], -1L, (Func<Stream>)(() => context.Assets!.Open(f)))));
+			InstallCoordinator.ClearInstalledManifest(context);
 		}
 
 		#region Saves
@@ -283,6 +285,7 @@ namespace CelesteAndroid
 		public long DeleteGame()
 		{
 			progress("Deleting the game files…", -1);
+			InstallCoordinator.ClearInstalledManifest(context);
 			long freed = 0;
 			foreach (string dir in new[] { GameDir(context), GameDir(context) + ".importing", Path.GetDirectoryName(PatchedDll(context))!, Path.Combine(Files(context), "steam", "resume") })
 			{

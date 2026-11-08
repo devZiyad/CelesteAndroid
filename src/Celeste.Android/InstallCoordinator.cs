@@ -87,6 +87,19 @@ namespace CelesteAndroid
 		public static void ClearInstalledManifest(Context context)
 		{
 			if (File.Exists(ManifestFile(context))) File.Delete(ManifestFile(context));
+			if (File.Exists(BuildFile(context))) File.Delete(BuildFile(context));
+		}
+
+		private static string BuildFile(Context context) => Path.Combine(context.FilesDir!.AbsolutePath, "steam", "installed-build.txt");
+
+		/// <summary>The Steam public-branch build ID of the installed game (null for folder imports and installs made before this was tracked).</summary>
+		public static ulong? InstalledBuild(Context context) =>
+			File.Exists(BuildFile(context)) && ulong.TryParse(File.ReadAllText(BuildFile(context)).Trim(), out ulong id) && id != 0 ? id : null;
+
+		public static void SaveInstalledBuild(Context context, ulong buildId)
+		{
+			Directory.CreateDirectory(Path.GetDirectoryName(BuildFile(context))!);
+			File.WriteAllText(BuildFile(context), buildId.ToString());
 		}
 
 		#endregion

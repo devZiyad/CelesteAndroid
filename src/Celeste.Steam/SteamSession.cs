@@ -22,6 +22,9 @@ namespace CelesteAndroid.Steam
 		void OnNeedGuardCode(bool isEmailCode, string? emailHint, bool previousCodeWasIncorrect);
 	}
 
+	/// <summary>A build of the game on Steam: the branch's build ID, the Linux depot's manifest ID and its compressed download size.</summary>
+	public sealed record SteamBuildInfo(ulong BuildId, ulong ManifestId, long DownloadBytes);
+
 	public class SteamException : Exception
 	{
 		public SteamException(string message, Exception? inner = null) : base(message, inner) { }
@@ -284,6 +287,46 @@ namespace CelesteAndroid.Steam
 
 		private byte[]? depotKey;
 
+		/// <summary>The public branch's build, as read by the last <see cref="GetManifestAsync"/> or <see cref="GetLatestBuildAsync"/>.</summary>
+		public SteamBuildInfo? LatestBuild { get; private set; }
+
+		/// <summary>The app's PICS record (app info), the source of the branch build IDs and the depot manifest IDs.</summary>
+		private async Task<KeyValue> GetAppInfoAsync()
+		{
+			SteamApps.PICSTokensCallback tokens = await apps.PICSGetAccessTokens(new[] { AppId }, Array.Empty<uint>()).ToTask().ConfigureAwait(false);
+			tokens.AppTokens.TryGetValue(AppId, out ulong appToken);
+			AsyncJobMultiple<SteamApps.PICSProductInfoCallback>.ResultSet info = await apps.PICSGetProductInfo(new SteamApps.PICSRequest(AppId, appToken), null).ToTask().ConfigureAwait(false);
+			return info.Results!.SelectMany(r => r.Apps.Values).Single(a => a.ID == AppId).KeyValues;
+		}
+
+		private static SteamBuildInfo ReadBuild(KeyValue appInfo, KeyValue depot, ulong manifestId)
+		{
+			KeyValue branch = appInfo["depots"]["branches"][Branch];
+			ulong.TryParse(branch["buildid"].AsString(), out ulong buildId);
+			long.TryParse(depot["manifests"][Branch]["download"].AsString(), out long download);
+			return new SteamBuildInfo(buildId, manifestId, download);
+		}
+
+		/// <summary>
+		/// Steam's current public-branch build ID and Linux depot manifest ID from app info (PICS), without downloading the manifest.
+		/// This is what "Check for updates" compares with the stored IDs.
+		/// </summary>
+		public async Task<SteamBuildInfo> GetLatestBuildAsync()
+		{
+			KeyValue appInfo = await GetAppInfoAsync().ConfigureAwait(false);
+			KeyValue depot = appInfo["depots"][LinuxDepotId.ToString()];
+			if (depot == KeyValue.Invalid)
+				throw new SteamException($"Depot {LinuxDepotId} is not part of app {AppId}.");
+			KeyValue node = depot["manifests"][Branch];
+			string? gid = node["gid"].AsString() ?? node.AsString();
+			if (!ulong.TryParse(gid, out ulong manifestId) || manifestId == 0)
+				throw new SteamException($"No manifest for depot {LinuxDepotId} on the '{Branch}' branch.");
+			SteamBuildInfo build = ReadBuild(appInfo, depot, manifestId);
+			LatestBuild = build;
+			log($"steam: PICS current {Branch}: build {build.BuildId}, depot {LinuxDepotId} manifest {build.ManifestId}, download {build.DownloadBytes} bytes");
+			return build;
+		}
+
 		/// <summary>
 		/// Finds the Linux depot's manifest on the public branch (refuses any other depot/branch), downloads it and returns it as a
 		/// <see cref="ManifestSnapshot"/>, together with the chunk source for the <see cref="DepotInstaller"/>.
@@ -298,10 +341,7 @@ namespace CelesteAndroid.Steam
 				throw new SteamException($"Steam did not grant the depot key for {LinuxDepotId}: {key.Result} (does this account own Celeste?).");
 			depotKey = key.DepotKey;
 
-			SteamApps.PICSTokensCallback tokens = await apps.PICSGetAccessTokens(new[] { AppId }, Array.Empty<uint>()).ToTask().ConfigureAwait(false);
-			tokens.AppTokens.TryGetValue(AppId, out ulong appToken);
-			AsyncJobMultiple<SteamApps.PICSProductInfoCallback>.ResultSet info = await apps.PICSGetProductInfo(new SteamApps.PICSRequest(AppId, appToken), null).ToTask().ConfigureAwait(false);
-			KeyValue appInfo = info.Results!.SelectMany(r => r.Apps.Values).Single(a => a.ID == AppId).KeyValues;
+			KeyValue appInfo = await GetAppInfoAsync().ConfigureAwait(false);
 
 			KeyValue depot = appInfo["depots"][LinuxDepotId.ToString()];
 			if (depot == KeyValue.Invalid)
@@ -314,7 +354,8 @@ namespace CelesteAndroid.Steam
 			string? gid = branchNode["gid"].AsString() ?? branchNode.AsString();
 			if (!ulong.TryParse(gid, out ulong manifestId) || manifestId == 0)
 				throw new SteamException($"No manifest for depot {LinuxDepotId} on the '{Branch}' branch.");
-			log($"steam: depot {LinuxDepotId} branch {Branch} manifest {manifestId}");
+			LatestBuild = ReadBuild(appInfo, depot, manifestId);
+			log($"steam: depot {LinuxDepotId} branch {Branch} build {LatestBuild.BuildId} manifest {manifestId}");
 
 			var servers = await GetCdnServersAsync().ConfigureAwait(false);
 			var cdn = new SteamKit2.CDN.Client(client);
