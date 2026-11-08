@@ -51,11 +51,11 @@ namespace CelesteAndroid
 			card.Background = shape;
 			card.SetPadding(Dp(26), Dp(22), Dp(26), Dp(22));
 			card.Clickable = true; // taps on the card do not reach the overlay's "tap outside to close"
-			card.AddView(MakeText(activity, title, 22, Color.White, TypefaceStyle.Bold));
+			card.AddView(UiKit.Text(activity, title, UiKit.HeadingSp, Color.White, TypefaceStyle.Bold));
 			if (message.Length > 0)
 			{
 				var scroll = new ScrollView(activity) { VerticalScrollBarEnabled = false };
-				scroll.AddView(MakeText(activity, message, 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal));
+				scroll.AddView(UiKit.Text(activity, message, UiKit.SecondarySp, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal));
 				card.AddView(scroll, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(8) });
 			}
 
@@ -65,6 +65,8 @@ namespace CelesteAndroid
 			overlay.AddView(card, new FrameLayout.LayoutParams(Dp(520), ViewGroup.LayoutParams.WrapContent, GravityFlags.Center)
 				{ TopMargin = Dp(16), BottomMargin = Dp(16) });
 			host.AddView(overlay, new FrameLayout.LayoutParams(-1, -1));
+			overlay.Alpha = 0f;
+			overlay.Animate()!.Alpha(1f).SetDuration(140)!.Start(); // short fade in
 
 			var dialog = new UiDialog(host, content, overlay, returnFocus, fallbackFocus);
 			if (cancelable) overlay.Click += (_, _) => dialog.Dismiss();
@@ -90,15 +92,6 @@ namespace CelesteAndroid
 			content.DescendantFocusability = DescendantFocusability.AfterDescendants;
 			View? target = returnFocus is { IsShown: true, Enabled: true } ? returnFocus : fallbackFocus;
 			target?.RequestFocus();
-		}
-
-		private static TextView MakeText(Activity activity, string text, float sp, Color color, TypefaceStyle style)
-		{
-			var view = new TextView(activity) { Text = text };
-			view.SetTextSize(Android.Util.ComplexUnitType.Sp, sp);
-			view.SetTextColor(color);
-			view.SetTypeface(Typeface.Create("sans-serif", style), style);
-			return view;
 		}
 	}
 }

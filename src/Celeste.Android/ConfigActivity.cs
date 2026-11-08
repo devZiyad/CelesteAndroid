@@ -39,8 +39,7 @@ namespace CelesteAndroid
 
 		private const int ReqSignIn = 20;
 		private const int ReqImportSavesFolder = 11, ReqExportSavesFolder = 13, ReqReimportFolder = 15;
-		private static readonly Color Night = Color.ParseColor("#120C22");
-		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
+		private static readonly Color Accent = UiKit.Accent;
 
 		private static readonly string[] TabNames = { "Port settings", "Saves", "Game files", "Steam account", "About" };
 
@@ -262,6 +261,8 @@ namespace CelesteAndroid
 				panels[i].Visibility = on ? ViewStates.Visible : ViewStates.Gone;
 			}
 			scroll.ScrollTo(0, 0);
+			panels[selectedTab].Alpha = 0f;
+			panels[selectedTab].Animate()!.Alpha(1f).SetDuration(120)!.Start(); // short crossfade between tabs
 			RefreshAccount();
 			Log.Info("CelesteAndroid", "[CelesteAndroid] config tab: " + TabNames[selectedTab]);
 			if (focusTab)
@@ -286,20 +287,13 @@ namespace CelesteAndroid
 		{
 			var root = new FrameLayout(this);
 			rootFrame = root;
-			root.SetBackgroundColor(Night);
-			root.AddView(new View(this)
-			{
-				Background = new GradientDrawable(GradientDrawable.Orientation.TopBottom!, new int[]
-				{
-					Color.Argb(255, 38, 24, 70), Color.Argb(255, 18, 12, 34),
-				}),
-			}, new FrameLayout.LayoutParams(-1, -1));
+			UiKit.AddArtBackdrop(this, root);
 
 			column = new LinearLayout(this) { Orientation = Orientation.Vertical };
 			column.SetPadding(Dp(72), Dp(16), Dp(72), Dp(8));
 			root.AddView(column, new FrameLayout.LayoutParams(-1, -1));
 
-			var title = Text("Config", 26, Color.White, TypefaceStyle.Bold);
+			var title = Text("Config", UiKit.TitleSp, Color.White, TypefaceStyle.Bold);
 			title.LetterSpacing = 0.06f;
 			column.AddView(title, new LinearLayout.LayoutParams(-2, -2) { BottomMargin = Dp(6) });
 
@@ -309,12 +303,12 @@ namespace CelesteAndroid
 			for (int i = 0; i < TabNames.Length; i++)
 			{
 				int index = i;
-				var tab = Text(TabNames[i], 15, Color.White, TypefaceStyle.Normal);
+				var tab = Text(TabNames[i], UiKit.SecondarySp, Color.White, TypefaceStyle.Normal);
 				tab.Gravity = GravityFlags.Center;
 				tab.SetSingleLine(true);
 				tab.SetPadding(Dp(10), Dp(9), Dp(10), Dp(9));
 				tab.SetMinimumHeight(Dp(40));
-				tab.Background = TabBackground();
+				tab.Background = UiKit.FocusBackground(this, 20, selectedFill: Color.Argb(60, 242, 184, 216));
 				MakeFocusable(tab, "Tab" + TabNames[i].Replace(" ", ""));
 				tab.Click += (_, _) => SelectTab(index, focusTab: true);
 				tabs[i] = tab;
@@ -322,7 +316,7 @@ namespace CelesteAndroid
 			}
 			column.AddView(tabBar, new LinearLayout.LayoutParams(-1, -2));
 
-			message = Text("", 14, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			message = Text("", UiKit.CaptionSp, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
 			column.AddView(message, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(2), BottomMargin = Dp(2) });
 
 			// No fixed heights: rows are as tall as their text plus padding, with a margin so the focus outline is never clipped.
@@ -349,7 +343,7 @@ namespace CelesteAndroid
 			deleteRow = ActionRow("Delete game files", "DeleteGameFiles", ConfirmDelete);
 			panels[2].AddView(deleteRow, RowParams());
 
-			accountText = Text("", 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			accountText = Text("", UiKit.SecondarySp, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
 			panels[3].AddView(accountText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(4), TopMargin = Dp(2) });
 			signInRow = ActionRow("Sign in to Steam", "SignIn", () => StartActivityForResult(
 				new Intent(this, typeof(SteamActivity)).PutExtra(SteamActivity.ExtraForceLogin, true), ReqSignIn));
@@ -388,14 +382,14 @@ namespace CelesteAndroid
 		{
 			Android.Content.PM.PackageInfo? info = PackageManager!.GetPackageInfo(PackageName!, 0);
 			string version = $"{info?.VersionName ?? "?"} (build {info?.LongVersionCode})";
-			panel.AddView(Text("Celeste — native Android port", 17, Color.White, TypefaceStyle.Bold),
+			panel.AddView(Text("Celeste — native Android port", UiKit.BodySp, Color.White, TypefaceStyle.Bold),
 				new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), TopMargin = Dp(6), BottomMargin = Dp(4) });
-			var versionText = Text("Version " + version, 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			var versionText = Text("Version " + version, UiKit.SecondarySp, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
 			versionText.ContentDescription = "Version";
 			panel.AddView(versionText, new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(10) });
 
 			panel.AddView(Text("If something goes wrong, share a plain text file with the app's recent log, Celeste's error log, the version, " +
-				"the device and the port settings. It never contains passwords, tokens or the Steam account.", 14, Color.Argb(190, 255, 255, 255), TypefaceStyle.Normal),
+				"the device and the port settings. It never contains passwords, tokens or the Steam account.", UiKit.CaptionSp, Color.Argb(190, 255, 255, 255), TypefaceStyle.Normal),
 				new LinearLayout.LayoutParams(-2, -2) { LeftMargin = Dp(16), BottomMargin = Dp(6) });
 			panel.AddView(ActionRow("Share logs", "ShareLogs", ShareLogs), RowParams());
 		}
@@ -437,15 +431,15 @@ namespace CelesteAndroid
 			row.SetGravity(GravityFlags.CenterVertical);
 			row.SetPadding(Dp(16), Dp(9), Dp(16), Dp(9));
 			row.SetMinimumHeight(Dp(44));
-			row.Background = FocusBackground();
+			row.Background = UiKit.FocusBackground(this, 14);
 			string name = setting?.Key ?? "ResetDefaults";
 			MakeFocusable(row, name);
 
-			var label = Text(setting == null ? "Reset to defaults" : setting.Label, 17, setting == null ? Accent : Color.White, TypefaceStyle.Normal);
+			var label = Text(setting == null ? "Reset to defaults" : setting.Label, UiKit.BodySp, setting == null ? Accent : Color.White, TypefaceStyle.Normal);
 			row.AddView(label, new LinearLayout.LayoutParams(0, -2, 1f));
 			if (setting != null)
 			{
-				var value = Text(ValueText(setting), 17, Accent, TypefaceStyle.Bold);
+				var value = Text(ValueText(setting), UiKit.BodySp, Accent, TypefaceStyle.Bold);
 				value.Gravity = GravityFlags.End;
 				row.AddView(value, new LinearLayout.LayoutParams(-2, -2));
 				rows[row] = (setting, value);
@@ -467,16 +461,6 @@ namespace CelesteAndroid
 		private LinearLayout.LayoutParams RowParams(int topMargin = 0) =>
 			new(-1, ViewGroup.LayoutParams.WrapContent) { TopMargin = Dp(2 + topMargin), BottomMargin = Dp(2) };
 
-		private LinearLayout.LayoutParams SectionParams(bool first = false) =>
-			new(-2, -2) { TopMargin = Dp(first ? 2 : 14), LeftMargin = Dp(16), BottomMargin = Dp(2) };
-
-		private TextView Section(string text)
-		{
-			var view = Text(text.ToUpperInvariant(), 12, Color.Argb(190, 242, 184, 216), TypefaceStyle.Bold);
-			view.LetterSpacing = 0.12f;
-			return view;
-		}
-
 		/// <summary>A row that runs an action instead of changing a value.</summary>
 		private View ActionRow(string label, string name, Action action)
 		{
@@ -484,52 +468,15 @@ namespace CelesteAndroid
 			row.SetGravity(GravityFlags.CenterVertical);
 			row.SetPadding(Dp(16), Dp(9), Dp(16), Dp(9));
 			row.SetMinimumHeight(Dp(44));
-			row.Background = FocusBackground();
+			row.Background = UiKit.FocusBackground(this, 14);
 			MakeFocusable(row, name);
-			row.AddView(Text(label, 17, Accent, TypefaceStyle.Normal), new LinearLayout.LayoutParams(0, -2, 1f));
+			row.AddView(Text(label, UiKit.BodySp, Accent, TypefaceStyle.Normal), new LinearLayout.LayoutParams(0, -2, 1f));
 			row.Click += (_, _) => action();
 			return row;
 		}
 
-		/// <summary>A tab: soft fill when selected, the focus outline when focused.</summary>
-		private Drawable TabBackground()
-		{
-			GradientDrawable Shape(Color fill, Color? stroke)
-			{
-				var shape = new GradientDrawable();
-				shape.SetCornerRadius(Dp(20));
-				shape.SetColor(fill);
-				if (stroke is Color c) shape.SetStroke(Dp(2.5f), c);
-				return shape;
-			}
-			var states = new StateListDrawable();
-			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, Shape(Color.Argb(110, 242, 184, 216), Accent));
-			states.AddState(new[] { Android.Resource.Attribute.StateSelected }, Shape(Color.Argb(60, 242, 184, 216), null));
-			states.AddState(new int[0], new ColorDrawable(Color.Transparent));
-			return states;
-		}
+		private TextView Text(string text, float sp, Color color, TypefaceStyle style) => UiKit.Text(this, text, sp, color, style);
 
-		private Drawable FocusBackground()
-		{
-			var focused = new GradientDrawable();
-			focused.SetCornerRadius(Dp(14));
-			focused.SetColor(Color.Argb(70, 242, 184, 216));
-			focused.SetStroke(Dp(2.5f), Accent);
-			var states = new StateListDrawable();
-			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, focused);
-			states.AddState(new int[0], new ColorDrawable(Color.Transparent));
-			return states;
-		}
-
-		private TextView Text(string text, float sp, Color color, TypefaceStyle style)
-		{
-			var view = new TextView(this) { Text = text };
-			view.SetTextSize(ComplexUnitType.Sp, sp);
-			view.SetTextColor(color);
-			view.SetTypeface(Typeface.Create("sans-serif", style), style);
-			return view;
-		}
-
-		private int Dp(float dp) => (int)TypedValue.ApplyDimension(ComplexUnitType.Dip, dp, Resources!.DisplayMetrics);
+		private int Dp(float dp) => UiKit.Dp(this, dp);
 	}
 }

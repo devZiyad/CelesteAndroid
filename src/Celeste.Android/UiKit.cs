@@ -1,3 +1,5 @@
+using System.IO;
+using Path = System.IO.Path;
 using Android.Content;
 using Android.Graphics;
 using Android.Graphics.Drawables;
@@ -17,6 +19,78 @@ namespace CelesteAndroid
 		public static readonly Color Night = Color.ParseColor("#120C22");
 		public static readonly Color Accent = Color.ParseColor("#F2B8D8");
 
+		// Type scale shared by every screen.
+		public const float TitleSp = 26, HeadingSp = 22, BodySp = 17, SecondarySp = 15, CaptionSp = 14, SectionSp = 12;
+		/// <summary>The focus outline's width everywhere (buttons, rows, tabs, fields, links).</summary>
+		public const float FocusStrokeDp = 3f;
+
+		public static TextView Text(Context context, string text, float sp, Color color, TypefaceStyle style = TypefaceStyle.Normal)
+		{
+			var view = new TextView(context) { Text = text };
+			view.SetTextSize(ComplexUnitType.Sp, sp);
+			view.SetTextColor(color);
+			view.SetTypeface(Typeface.Create("sans-serif", style), style);
+			return view;
+		}
+
+		/// <summary>The night sky behind every screen without the key art (splash, dialogs' card).</summary>
+		public static Drawable NightBackground() =>
+			new GradientDrawable(GradientDrawable.Orientation.TopBottom!, new int[] { Color.Argb(255, 38, 24, 70), Color.Argb(255, 18, 12, 34) });
+
+		/// <summary>
+		/// The key art (the build's art, or the imported game's) under a dark scrim, as the first layers of a screen's root. The launcher shows
+		/// the art itself; the other screens get it dimmed so every screen shares one background.
+		/// </summary>
+		public static void AddArtBackdrop(Context context, FrameLayout root)
+		{
+			root.SetBackgroundColor(Night);
+			var art = new ImageView(context);
+			art.SetScaleType(ImageView.ScaleType.CenterCrop);
+			LoadArt(context, art);
+			root.AddView(art, new FrameLayout.LayoutParams(-1, -1));
+			root.AddView(new View(context)
+			{
+				Background = new GradientDrawable(GradientDrawable.Orientation.TopBottom!, new int[] { Color.Argb(225, 38, 24, 70), Color.Argb(245, 18, 12, 34) }),
+			}, new FrameLayout.LayoutParams(-1, -1));
+		}
+
+		/// <summary>The art embedded in the build, or, in the shareable build, the imported game's key art, or a plain color.</summary>
+		public static void LoadArt(Context context, ImageView target)
+		{
+			if (context.Resources!.GetIdentifier("celeste_art", "drawable", context.PackageName) != 0)
+			{
+				target.SetImageResource(Resource.Drawable.launcher_art);
+				return;
+			}
+			string imported = Path.Combine(GameInstaller.GameDir(context), "Content", "Graphics", "SplashScreen.png");
+			if (File.Exists(imported))
+				target.SetImageBitmap(BitmapFactory.DecodeFile(imported, new BitmapFactory.Options { InSampleSize = 2 }));
+			else
+				target.SetImageResource(Resource.Drawable.launcher_art);
+		}
+
+		/// <summary>
+		/// The one focus style: the accent outline and a soft accent fill when focused. Idle: nothing, or a fill / outline / "selected" fill
+		/// (tabs) as asked.
+		/// </summary>
+		public static Drawable FocusBackground(Context context, float radiusDp, Color? idleFill = null, Color? idleStroke = null, float idleStrokeDp = 1.5f, Color? selectedFill = null)
+		{
+			GradientDrawable Shape(Color fill, Color? stroke, float strokeDp)
+			{
+				var shape = new GradientDrawable();
+				shape.SetCornerRadius(Dp(context, radiusDp));
+				shape.SetColor(fill);
+				if (stroke is Color c) shape.SetStroke(Dp(context, strokeDp), c);
+				return shape;
+			}
+			var states = new StateListDrawable();
+			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, Shape(Color.Argb(90, 242, 184, 216), Accent, FocusStrokeDp));
+			if (selectedFill is Color selected)
+				states.AddState(new[] { Android.Resource.Attribute.StateSelected }, Shape(selected, null, 0));
+			states.AddState(new int[0], Shape(idleFill ?? Color.Transparent, idleStroke, idleStrokeDp));
+			return states;
+		}
+
 		public static int Dp(Context context, float dp) =>
 			(int)TypedValue.ApplyDimension(ComplexUnitType.Dip, dp, context.Resources!.DisplayMetrics);
 
@@ -35,7 +109,7 @@ namespace CelesteAndroid
 
 			var states = new StateListDrawable();
 			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, Shape(context,
-				filled ? Color.Argb(255, 255, 236, 246) : Color.Argb(110, 242, 184, 216), Accent, 3.5f));
+				filled ? Color.Argb(255, 255, 236, 246) : Color.Argb(110, 242, 184, 216), Accent, FocusStrokeDp));
 			states.AddState(new[] { Android.Resource.Attribute.StatePressed }, Shape(context,
 				filled ? Color.Argb(255, 242, 214, 232) : Color.Argb(90, 242, 184, 216), Accent, 2f));
 			states.AddState(new int[0], filled ? Shape(context, Color.White, null, 0) : Shape(context, Color.Argb(40, 255, 255, 255), Color.Argb(200, 255, 255, 255), 1.5f));
@@ -70,10 +144,7 @@ namespace CelesteAndroid
 		public static FrameLayout Splash(Context context, string subtitle)
 		{
 			var root = new FrameLayout(context) { Clickable = true, Focusable = false }; // swallows touches, never takes focus
-			root.Background = new GradientDrawable(GradientDrawable.Orientation.TopBottom!, new int[]
-			{
-				Color.Argb(255, 38, 24, 70), Color.Argb(255, 18, 12, 34),
-			});
+			root.Background = NightBackground();
 			var column = NoClip(new LinearLayout(context) { Orientation = Orientation.Vertical });
 			column.SetGravity(GravityFlags.Center);
 			root.AddView(column, new FrameLayout.LayoutParams(-2, -2, GravityFlags.Center));
@@ -88,16 +159,13 @@ namespace CelesteAndroid
 			}
 			else
 			{
-				var title = new TextView(context) { Text = "CELESTE", Gravity = GravityFlags.Center };
-				title.SetTextSize(ComplexUnitType.Sp, 54);
-				title.SetTextColor(Color.White);
-				title.SetTypeface(Typeface.Create("sans-serif", TypefaceStyle.Bold), TypefaceStyle.Bold);
+				TextView title = Text(context, "CELESTE", 54, Color.White, TypefaceStyle.Bold);
+				title.Gravity = GravityFlags.Center;
 				title.LetterSpacing = 0.18f;
 				column.AddView(title);
 			}
-			var sub = new TextView(context) { Text = subtitle, Gravity = GravityFlags.Center };
-			sub.SetTextSize(ComplexUnitType.Sp, 15);
-			sub.SetTextColor(Accent);
+			TextView sub = Text(context, subtitle, SecondarySp, Accent);
+			sub.Gravity = GravityFlags.Center;
 			sub.LetterSpacing = 0.06f;
 			column.AddView(sub, new LinearLayout.LayoutParams(-2, -2) { TopMargin = Dp(context, 4) });
 

@@ -48,8 +48,7 @@ namespace CelesteAndroid
 		/// <summary>Debug (adb): shows the error screen to check the layout.</summary>
 		public const string ExtraShowError = "showError";
 
-		private static readonly Color Night = Color.ParseColor("#120C22");
-		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
+		private static readonly Color Accent = UiKit.Accent;
 
 		private enum Screen { Message, Qr, Credentials }
 
@@ -318,11 +317,7 @@ namespace CelesteAndroid
 		private View BuildLayout()
 		{
 			var root = new FrameLayout(this);
-			root.SetBackgroundColor(Night);
-			root.AddView(new View(this)
-			{
-				Background = new GradientDrawable(GradientDrawable.Orientation.TopBottom!, new int[] { Color.Argb(255, 38, 24, 70), Color.Argb(255, 18, 12, 34) }),
-			}, new FrameLayout.LayoutParams(-1, -1));
+			UiKit.AddArtBackdrop(this, root);
 
 			var row = UiKit.NoClip(new LinearLayout(this) { Orientation = Orientation.Horizontal });
 			row.SetGravity(GravityFlags.CenterVertical);
@@ -339,9 +334,9 @@ namespace CelesteAndroid
 			scroll.AddView(column, new FrameLayout.LayoutParams(-1, -2));
 			row.AddView(scroll, new LinearLayout.LayoutParams(0, -1, 1f));
 
-			title = Text("", 26, Color.White, TypefaceStyle.Bold);
+			title = Text("", UiKit.TitleSp, Color.White, TypefaceStyle.Bold);
 			column.AddView(title);
-			status = Text("", 15, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
+			status = Text("", UiKit.SecondarySp, Color.Argb(225, 255, 255, 255), TypefaceStyle.Normal);
 			column.AddView(status, new LinearLayout.LayoutParams(-1, -2) { TopMargin = Dp(6) });
 
 			// QR code (second option): scanned with the Steam app on another device; the code itself is drawn at the right
@@ -500,7 +495,7 @@ namespace CelesteAndroid
 			field.InputType = password ? InputTypes.ClassText | InputTypes.TextVariationPassword : InputTypes.ClassText | InputTypes.TextFlagNoSuggestions;
 			if (password) field.TransformationMethod = PasswordTransformationMethod.Instance;
 			field.ImeOptions = ImeAction.Next | (ImeAction)ImeFlags.NoExtractUi;
-			field.Background = FocusBackground(Dp(23), Color.Argb(40, 255, 255, 255), 1.5f);
+			field.Background = UiKit.FocusBackground(this, 23, idleFill: Color.Argb(40, 255, 255, 255), idleStroke: Color.Argb(160, 255, 255, 255));
 			field.Focusable = true;
 			field.FocusableInTouchMode = true;
 			field.ContentDescription = hint;
@@ -511,38 +506,15 @@ namespace CelesteAndroid
 
 		private TextView Link(string text)
 		{
-			var view = Text(text, 14, Accent, TypefaceStyle.Normal);
+			var view = Text(text, UiKit.CaptionSp, Accent, TypefaceStyle.Normal);
 			view.SetPadding(Dp(8), Dp(6), Dp(8), Dp(6));
-			view.Background = FocusBackground(Dp(14), Color.Argb(70, 242, 184, 216), 2.5f, transparentWhenIdle: true);
+			view.Background = UiKit.FocusBackground(this, 14);
 			return view;
 		}
 
-		private Drawable FocusBackground(int radius, Color fill, float strokeDp, bool transparentWhenIdle = false)
-		{
-			var focused = new GradientDrawable();
-			focused.SetCornerRadius(radius);
-			focused.SetColor(fill);
-			focused.SetStroke(Dp(strokeDp), Accent);
-			var idle = new GradientDrawable();
-			idle.SetCornerRadius(radius);
-			idle.SetColor(transparentWhenIdle ? Color.Transparent : fill);
-			if (!transparentWhenIdle) idle.SetStroke(Dp(1.5f), Color.Argb(160, 255, 255, 255));
-			var states = new StateListDrawable();
-			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, focused);
-			states.AddState(new int[0], idle);
-			return states;
-		}
+		private TextView Text(string text, float sp, Color color, TypefaceStyle style) => UiKit.Text(this, text, sp, color, style);
 
-		private TextView Text(string text, float sp, Color color, TypefaceStyle style)
-		{
-			var view = new TextView(this) { Text = text };
-			view.SetTextSize(ComplexUnitType.Sp, sp);
-			view.SetTextColor(color);
-			view.SetTypeface(Typeface.Create("sans-serif", style), style);
-			return view;
-		}
-
-		private int Dp(float dp) => (int)TypedValue.ApplyDimension(ComplexUnitType.Dip, dp, Resources!.DisplayMetrics);
+		private int Dp(float dp) => UiKit.Dp(this, dp);
 
 		#endregion
 	}

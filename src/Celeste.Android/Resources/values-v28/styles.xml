@@ -5,6 +5,7 @@
 		<item name="android:colorAccent">@color/celeste_accent</item>
 		<item name="android:statusBarColor">@android:color/transparent</item>
 		<item name="android:navigationBarColor">@android:color/transparent</item>
+		<item name="android:windowAnimationStyle">@style/Animation.Celeste</item>
 		<!-- Uses the whole screen, including the front camera area. -->
 		<item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
 	</style>

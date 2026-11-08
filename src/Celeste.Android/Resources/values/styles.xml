@@ -5,5 +5,13 @@
 		<item name="android:colorAccent">@color/celeste_accent</item>
 		<item name="android:statusBarColor">@android:color/transparent</item>
 		<item name="android:navigationBarColor">@android:color/transparent</item>
+		<item name="android:windowAnimationStyle">@style/Animation.Celeste</item>
+	</style>
+	<!-- Short fades between screens instead of the system slide. -->
+	<style name="Animation.Celeste" parent="@android:style/Animation.Activity">
+		<item name="android:activityOpenEnterAnimation">@anim/celeste_fade_in</item>
+		<item name="android:activityOpenExitAnimation">@anim/celeste_fade_out</item>
+		<item name="android:activityCloseEnterAnimation">@anim/celeste_fade_in</item>
+		<item name="android:activityCloseExitAnimation">@anim/celeste_fade_out</item>
 	</style>
 </resources>

@@ -5,6 +5,7 @@
 		<item name="android:colorAccent">@color/celeste_accent</item>
 		<item name="android:statusBarColor">@android:color/transparent</item>
 		<item name="android:navigationBarColor">@android:color/transparent</item>
+		<item name="android:windowAnimationStyle">@style/Animation.Celeste</item>
 		<item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
 		<!-- System splash (Android 12+): the app icon over the night sky. -->
 		<item name="android:windowSplashScreenBackground">@color/celeste_night</item>

@@ -36,8 +36,8 @@ namespace CelesteAndroid
 		private const int RequestSteam = 4;
 		private const string LogTag = "CelesteLauncher";
 
-		private static readonly Color Night = Color.ParseColor("#120C22");
-		private static readonly Color Accent = Color.ParseColor("#F2B8D8");
+		private static readonly Color Night = UiKit.Night;
+		private static readonly Color Accent = UiKit.Accent;
 
 		private ImageView art = null!;
 		private LinearLayout panel = null!;
@@ -316,13 +316,13 @@ namespace CelesteAndroid
 				panel.AddView(title);
 			}
 
-			var subtitle = Text("Native Android port", 15, Accent, TypefaceStyle.Normal);
+			var subtitle = Text("Native Android port", UiKit.SecondarySp, Accent, TypefaceStyle.Normal);
 			subtitle.LetterSpacing = 0.06f;
 			panel.AddView(subtitle, Margins(top: -4));
 
 			// The status line: always exactly one line (so the layout never moves while the text changes); text that is too long is
 			// shortened in the middle by SetStatus (InstallText.FitMiddle), and the TextView itself also ellipsizes in the middle as a safety net.
-			status = Text("", 14, Color.Argb(220, 255, 255, 255), TypefaceStyle.Normal);
+			status = Text("", UiKit.CaptionSp, Color.Argb(220, 255, 255, 255), TypefaceStyle.Normal);
 			status.SetSingleLine(true);
 			status.SetLines(1);
 			status.SetMaxLines(1);
@@ -364,46 +364,11 @@ namespace CelesteAndroid
 			return root;
 		}
 
-		private void LoadArt()
-		{
-			// Art embedded in the build (GameArt/) or, in the shareable build, the imported game's key art.
-			if (Resources!.GetIdentifier("celeste_art", "drawable", PackageName) != 0)
-			{
-				art.SetImageResource(Resource.Drawable.launcher_art);
-				return;
-			}
-			string imported = System.IO.Path.Combine(GameInstaller.GameDir(this), "Content", "Graphics", "SplashScreen.png");
-			if (File.Exists(imported))
-				art.SetImageBitmap(BitmapFactory.DecodeFile(imported, new BitmapFactory.Options { InSampleSize = 2 }));
-			else
-				art.SetImageResource(Resource.Drawable.launcher_art);
-		}
+		private void LoadArt() => UiKit.LoadArt(this, art);
 
 		private TextView PillButton(string label, bool filled, bool small = false) => UiKit.Pill(this, label, filled, minHeightDp: small ? 38 : filled ? 54 : 44);
 
-		private TextView Text(string text, float sp, Color color, TypefaceStyle style)
-		{
-			var view = new TextView(this) { Text = text };
-			view.SetTextSize(ComplexUnitType.Sp, sp);
-			view.SetTextColor(color);
-			view.SetTypeface(Typeface.Create("sans-serif", style), style);
-			return view;
-		}
-
-		private TextView LinkText(string text)
-		{
-			var view = Text(text, 14, Accent, TypefaceStyle.Normal);
-			view.SetPadding(Dp(8), Dp(6), Dp(8), Dp(6));
-			var focused = new GradientDrawable();
-			focused.SetCornerRadius(Dp(14));
-			focused.SetColor(Color.Argb(70, 242, 184, 216));
-			focused.SetStroke(Dp(2.5f), Accent);
-			var states = new StateListDrawable();
-			states.AddState(new[] { Android.Resource.Attribute.StateFocused }, focused);
-			states.AddState(new int[0], new ColorDrawable(Color.Transparent));
-			view.Background = states;
-			return view;
-		}
+		private TextView Text(string text, float sp, Color color, TypefaceStyle style) => UiKit.Text(this, text, sp, color, style);
 
 		private static FrameLayout.LayoutParams Match() =>
 			new(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent);
@@ -414,7 +379,7 @@ namespace CelesteAndroid
 				TopMargin = Dp(top), LeftMargin = Dp(left), RightMargin = Dp(right),
 			};
 
-		private int Dp(float dp) => (int)TypedValue.ApplyDimension(ComplexUnitType.Dip, dp, Resources!.DisplayMetrics);
+		private int Dp(float dp) => UiKit.Dp(this, dp);
 
 		#endregion
 
