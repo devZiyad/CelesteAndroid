@@ -111,7 +111,7 @@ namespace CelesteAndroid
 						await pipeline.RunAsync(ct).ConfigureAwait(false);
 						return;
 					}
-					catch (OperationCanceledException)
+					catch (OperationCanceledException) when (ct.IsCancellationRequested)
 					{
 						Log.Info(LogTag, "cancelled (the download progress is kept and resumes next time)");
 						InstallCoordinator.ClearPending(this);
@@ -155,7 +155,7 @@ namespace CelesteAndroid
 					}
 				}
 			}
-			catch (OperationCanceledException)
+			catch (OperationCanceledException) when (ct.IsCancellationRequested)
 			{
 				InstallCoordinator.ClearPending(this);
 				InstallCoordinator.Publish(InstallStatus.None);
@@ -196,6 +196,7 @@ namespace CelesteAndroid
 		{
 			FileNotFoundException or DirectoryNotFoundException => false, // not a connection problem (e.g. Cecil's AssemblyResolutionException)
 			SocketException or IOException or System.Net.Http.HttpRequestException or TimeoutException or SteamException => true,
+			OperationCanceledException => true, // a timeout inside Steam/HTTP (our own cancel is handled before this is asked)
 			AggregateException a => a.InnerExceptions.Any(IsNetwork),
 			_ => e.InnerException != null && IsNetwork(e.InnerException),
 		};
