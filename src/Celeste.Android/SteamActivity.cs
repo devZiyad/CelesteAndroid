@@ -178,7 +178,7 @@ namespace CelesteAndroid
 				(string user, string pass) = await submitted.ConfigureAwait(false);
 				try
 				{
-					return await LoginWithCredentialsAsync(user, pass, ct).ConfigureAwait(false);
+					return await LoginWithCredentialsRetryingAsync(user, pass, ct).ConfigureAwait(false);
 				}
 				catch (SteamKit2.Authentication.AuthenticationException e)
 				{
@@ -199,6 +199,26 @@ namespace CelesteAndroid
 				finally
 				{
 					user = pass = "";
+				}
+			}
+		}
+
+		/// <summary>
+		/// Steam sometimes drops the connection while the user is still approving in the Steam app (the first attempt used to end in an
+		/// error screen). A lost connection is not a wrong password: reconnect and sign in again, up to three attempts.
+		/// </summary>
+		private async Task<SteamAuthResult> LoginWithCredentialsRetryingAsync(string user, string pass, CancellationToken ct)
+		{
+			for (int attempt = 1; ; attempt++)
+			{
+				try
+				{
+					return await LoginWithCredentialsAsync(user, pass, ct).ConfigureAwait(false);
+				}
+				catch (Exception e) when (attempt < 3 && e is SteamKit2.AsyncJobFailedException or SteamException && !ct.IsCancellationRequested)
+				{
+					LogLine($"steam: connection lost while waiting for approval, signing in again (attempt {attempt + 1}/3)");
+					// LoginWithCredentialsAsync reconnects first because the session is no longer connected
 				}
 			}
 		}
